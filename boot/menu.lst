@@ -1,0 +1,9 @@
+title System Alpha
+	kernel (fd0)/boot/kernel.bin
+
+title Memory Test
+	kernel (fd0)/boot/memtest.bin
+
+title Reboot
+	reboot
+
