@@ -13,7 +13,7 @@ void main(const uint32_t *multiboot_info)
 	uint32_t mem_upper = multiboot_info[2];
 
 	gdt_init();
-	paging_init();
+	paging_init(mem_upper);
 	console_init();
 	idt_init();
 
@@ -23,9 +23,6 @@ void main(const uint32_t *multiboot_info)
 	kprintf("Upper memory: %dk\n", mem_upper);
 	if (mem_upper < 4096)
 		kpanic("upper memory size less than 4096k");
-	
-	kprintf("Dereferencing NULL (this should crash...)\n");
-	kprintf("%x", *((uint32_t*) NULL));
 }
 
 //==============================================================================

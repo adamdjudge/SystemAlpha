@@ -56,6 +56,12 @@ enable_paging:
 	movl %eax, %cr0
 	ret
 
+.global flush_tlb
+flush_tlb:
+	movl %cr3, %eax
+	movl %eax, %cr3
+	ret
+
 .extern idt_ptr
 .global load_idt
 load_idt:

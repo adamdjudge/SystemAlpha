@@ -8,5 +8,7 @@
 #define PAGE_USER      1<<2
 
 void paging_init();
+uint32_t alloc_page(uint32_t vaddr, uint32_t flags);
+void free_page(uint32_t vaddr);
 
 #endif
