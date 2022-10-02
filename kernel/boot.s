@@ -47,6 +47,15 @@ long_jmp:
 	ltr %ax
 	ret
 
+.global enable_paging
+enable_paging:
+	movl $page_directory, %eax
+	movl %eax, %cr3
+	movl %cr0, %eax
+	orl $0x80010000, %eax
+	movl %eax, %cr0
+	ret
+
 .extern idt_ptr
 .global load_idt
 load_idt:

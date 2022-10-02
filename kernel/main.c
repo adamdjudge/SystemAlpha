@@ -1,10 +1,10 @@
 #include "types.h"
 #include "util.h"
+#include "paging.h"
 #include "console.h"
 #include "idt.h"
 
 static void gdt_init();
-static void paging_init();
 
 extern void jump_usermode();
 
@@ -18,13 +18,14 @@ void main(const uint32_t *multiboot_info)
 	idt_init();
 
 	kprintf("System Alpha kernel v0.0.1\n");
+	kprintf("(C) 2022 Adam Judge\n");
 
-	kprintf("upper memory: %dk\n", mem_upper);
+	kprintf("Upper memory: %dk\n", mem_upper);
 	if (mem_upper < 4096)
 		kpanic("upper memory size less than 4096k");
 	
-	for (int i = 0x000000; i < 0x100000; i += 4)
-		kprintf("%x: %x\n", i, *((uint32_t*) i));
+	kprintf("Dereferencing NULL (this should crash...)\n");
+	kprintf("%x", *((uint32_t*) NULL));
 }
 
 //==============================================================================
@@ -75,39 +76,4 @@ static void gdt_init()
 	load_gdt();
 	tss[1] = 0x103000;
 	tss[2] = 0x10;
-}
-
-//==============================================================================
-// Paging Setup
-//==============================================================================
-
-extern uint32_t *page_directory;
-extern uint32_t *page_table;
-extern void *kernel_code_end;
-
-static void paging_init()
-{
-	uint32_t i, addr;
-	uint8_t flags;
-
-	memset(page_directory, 0, 4096);
-	memset(page_table, 0, 4096);
-
-	for (i = 256; i < 1024; i++) {
-		addr = 4096 * i;
-		if (addr < (uint32_t) &kernel_code_end)
-			flags = 0x1; // kernel code is read-only
-		else
-			flags = 0x3;
-		page_table[i] = addr | flags;
-	}
-
-	page_table[255] = 0xb8000 | 0x3; // map VGA text memory to 0xff000
-	page_directory[0] = (uint32_t) page_table | 0x3;
-
-	asm("movl %0, %%eax" : : "a" (page_directory));
-	asm("movl %eax, %cr3");
-	asm("movl %cr0, %eax");
-	asm("orl $0x80010000, %eax");
-	asm("movl %eax, %cr0");
 }

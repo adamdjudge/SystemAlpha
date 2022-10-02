@@ -75,9 +75,9 @@ void idt_init()
 	load_idt();
 }
 
-void dump_exception(struct exception *e)
+static void dump_exception(struct exception *e)
 {
-	kprintf("*** exception %d  ecode %d  flags 0x%x  eip 0x%x\n",
+	kprintf("*** exception %d 0x%x  eflags 0x%x  eip 0x%x\n",
 		e->inum, e->ecode, e->eflags, e->eip);
 	kprintf("eax 0x%x  ebx 0x%x  ecx 0x%x  edx 0x%x\n",
 		e->eax, e->ebx, e->ecx, e->edx);

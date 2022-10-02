@@ -22,6 +22,7 @@ SECTIONS
 	{
 		*(.data)
 		*(.rodata)
+		kernel_end = .;
 	}
 
 	/DISCARD/ :
