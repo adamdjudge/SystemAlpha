@@ -3,6 +3,7 @@
 
 #include "types.h"
 
+/* Interrupt numbers */
 enum {
 	INUM_DIVISION_BY_ZERO,
 	INUM_DEBUG,
@@ -22,9 +23,27 @@ enum {
 	INUM_UNKNOWN_INTERRUPT,
 	INUM_COPROCESSOR_FAULT,
 	INUM_ALIGNMENT_CHECK,
-	INUM_MACHINE_CHECK
+	INUM_MACHINE_CHECK,
+
+	INUM_ISR0 = 32,
+	INUM_ISR1,
+	INUM_ISR2,
+	INUM_ISR3,
+	INUM_ISR4,
+	INUM_ISR5,
+	INUM_ISR6,
+	INUM_ISR7,
+	INUM_ISR8,
+	INUM_ISR9,
+	INUM_ISR10,
+	INUM_ISR11,
+	INUM_ISR12,
+	INUM_ISR13,
+	INUM_ISR14,
+	INUM_ISR15
 };
 
+/* Exception structure pushed to the stack during interrupt handling */
 struct exception {
 	uint32_t gs;
 	uint32_t fs;
@@ -49,5 +68,6 @@ struct exception {
 };
 
 void idt_init();
+void idt_install_isr(uint8_t irq_num, void (*handler)(struct exception*));
 
 #endif

@@ -2,6 +2,7 @@
 #include "util.h"
 #include "paging.h"
 #include "console.h"
+#include "timer.h"
 #include "idt.h"
 
 static void gdt_init();
@@ -15,10 +16,11 @@ void main(const uint32_t *multiboot_info)
 	gdt_init();
 	paging_init(mem_upper);
 	console_init();
+	timer_init();
 	idt_init();
 
 	kprintf("System Alpha kernel v0.0.1\n");
-	kprintf("(C) 2022 Adam Judge\n");
+	kprintf("(C) 2023 Adam Judge\n");
 
 	kprintf("Upper memory: %dk\n", mem_upper);
 	if (mem_upper < 4096)

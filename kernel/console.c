@@ -1,6 +1,7 @@
 #include "io.h"
 #include "types.h"
 #include "util.h"
+#include "timer.h"
 
 #include "console.h"
 
@@ -125,10 +126,21 @@ static void printx32(uint32_t val)
 	}
 }
 
+static void prints(char *s)
+{
+	while (*s)
+		putc(*(s++));
+}
+
 void kprintf(char *fmt, ...)
 {
 	char *c;
 	uint32_t *argptr = (uint32_t*) &fmt + 1;
+
+	putc('[');
+	printd(jiffies());
+	putc(']');
+	putc(' ');
 
 	for (c = fmt; *c != '\0'; c++) {
 		if (*c != '%') {
@@ -150,6 +162,9 @@ void kprintf(char *fmt, ...)
 		case 'x':
 			printx32(*(argptr++));
 			break;
+		case 's':
+			prints((char*) *(argptr--));
+			break;
 		default:
 			putc('%');
 			putc(*c);
@@ -159,7 +174,6 @@ void kprintf(char *fmt, ...)
 
 void kpanic(char *msg)
 {
-	kprintf("kernel panic: ");
-	kprintf(msg);
+	kprintf("kernel panic: %s", msg);
 	for (;;);
 }
