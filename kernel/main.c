@@ -4,6 +4,7 @@
 #include "console.h"
 #include "timer.h"
 #include "idt.h"
+#include "fdc.h"
 
 static void gdt_init();
 
@@ -25,6 +26,8 @@ void main(const uint32_t *multiboot_info)
 	kprintf("Upper memory: %dk\n", mem_upper);
 	if (mem_upper < 4096)
 		kpanic("upper memory size less than 4096k");
+	
+	fdc_init();
 }
 
 //==============================================================================
