@@ -5,6 +5,7 @@
 #include "timer.h"
 #include "idt.h"
 #include "fdc.h"
+#include "pci.h"
 
 static void gdt_init();
 
@@ -27,7 +28,8 @@ void main(const uint32_t *multiboot_info)
 	if (mem_upper < 4096)
 		kpanic("upper memory size less than 4096k");
 	
-	fdc_init();
+	//fdc_init();
+	pci_init();
 }
 
 //==============================================================================

@@ -1,7 +1,6 @@
 #include "io.h"
 #include "types.h"
 #include "util.h"
-#include "timer.h"
 
 #include "console.h"
 
@@ -137,11 +136,6 @@ void kprintf(char *fmt, ...)
 	char *c;
 	uint32_t *argptr = (uint32_t*) &fmt + 1;
 
-	putc('[');
-	printd(jiffies());
-	putc(']');
-	putc(' ');
-
 	for (c = fmt; *c != '\0'; c++) {
 		if (*c != '%') {
 			putc(*c);
@@ -163,7 +157,7 @@ void kprintf(char *fmt, ...)
 			printx32(*(argptr++));
 			break;
 		case 's':
-			prints((char*) *(argptr--));
+			prints((char*) *(argptr++));
 			break;
 		default:
 			putc('%');
