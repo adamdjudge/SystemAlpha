@@ -20,7 +20,7 @@ enum {
 	INUM_STACK_FAULT,
 	INUM_GENERAL_PROTECTION_FAULT,
 	INUM_PAGE_FAULT,
-	INUM_UNKNOWN_INTERRUPT,
+	INUM_RESERVED,
 	INUM_COPROCESSOR_FAULT,
 	INUM_ALIGNMENT_CHECK,
 	INUM_MACHINE_CHECK,
@@ -43,31 +43,7 @@ enum {
 	INUM_ISR15
 };
 
-/* Exception structure pushed to the stack during interrupt handling */
-struct exception {
-	uint32_t gs;
-	uint32_t fs;
-	uint32_t es;
-	uint32_t ds;
-	uint32_t ss;
-	uint32_t edi;
-	uint32_t esi;
-	uint32_t ebp;
-	uint32_t esp;
-	uint32_t ebx;
-	uint32_t edx;
-	uint32_t ecx;
-	uint32_t eax;
-	uint32_t inum;
-	uint32_t ecode;
-	uint32_t eip;
-	uint32_t cs;
-	uint32_t eflags;
-	uint32_t user_esp;
-	uint32_t user_ss;
-};
-
 void idt_init();
-void idt_install_isr(uint8_t irq_num, void (*handler)(struct exception*));
+void idt_install_isr(uint8_t irq_num, void (*handler)());
 
 #endif

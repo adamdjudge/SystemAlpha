@@ -18,3 +18,12 @@ void memcpy(void *dst, void *src, uint32_t n)
 	for (i = 0; i < n; i++)
 		d[i] = s[i];
 }
+
+int str_eq(char *a, char *b)
+{
+	while (*a || *b) {
+		if (*(a++) != *(b++))
+			return 0;
+	}
+	return 1;
+}

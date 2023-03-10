@@ -1,378 +1,177 @@
-# Multiboot header, required by GRUB
+################################################################################
+# The Multiboot header, which is placed by the linker at the very beginning of
+# the compiled executable's text segment and tells GRUB that this is a valid
+# bootable kernel.
+################################################################################
+
 .set MULTIBOOT_MAGIC, 0x1badb002
 .set MULTIBOOT_FLAGS, 0x3
-.set MULTIBOOT_CHECKSUM, -(MULTIBOOT_MAGIC+MULTIBOOT_FLAGS)
+.set MULTIBOOT_CHECKSUM, -(MULTIBOOT_MAGIC + MULTIBOOT_FLAGS)
+
 .section .multiboot
 	.long MULTIBOOT_MAGIC
 	.long MULTIBOOT_FLAGS
 	.long MULTIBOOT_CHECKSUM
 
-# Static kernel stack
-.section .bss
-kstack_bottom:
-.skip 16384
-kstack_top:
+################################################################################
+# Here we statically define a few buffers used in kernel initialization before
+# we have dynamic memory allocation. First is the kernel stack, which is used
+# during startup and then handed over to the system task, as well as a second
+# stack that is switched to (via the TSS) when interrupting to kernel mode from
+# a user task. We also need to create the initial page directory and page table
+# so we can set up virtual memory paging.
+################################################################################
 
-# Static initial page directory and page table
+.section .bss
+.align 4096
+
+.global kstack_top
+.global istack_top
 .global page_directory
 .global page_table
-.align 4096
-page_directory:
-.skip 4096
-page_table:
-.skip 4096
 
-# Kernel entry point
+kstack_bottom:
+	.skip 4096
+kstack_top:
+
+istack_bottom:
+	.skip 4096
+istack_top:
+
+page_directory:
+	.skip 4096
+
+page_table:
+	.skip 4096
+
+################################################################################
+# One of the peculiarities of x86 is the Global Descriptor Table, which defines
+# segments. We need to create segments for code and data for both kernel and
+# user access, but since we just use a flat memory model, each of these segments
+# is configured to span the entire address range. We also need to define a Task
+# State Segment (TSS), which we don't use to its full extent, but it is still
+# required as it contains values for SS:ESP to switch to when interrupting from
+# user to kernel mode. The GDT is pointed to by a GDT descriptor, which we later
+# use with the lgdt instruction to load the GDT.
+#
+# We could set up the GDT the fancy way in C using structs and lots of bit
+# manipulations and having a function to install entries properly, but since
+# it's an ugly x86-specific feature, we'll just keep it here in assembly, and
+# also just define it with constants for simplicity. Fortunately, once it and
+# the TSS are set up they never have to be modified again.
+################################################################################
+
+.section .data
+.align 8
+
+.set KERNEL_CS, 0x8
+.set KERNEL_DS, 0x10
+.set KERNEL_TS, 0x28
+
+gdt:
+	.quad 0x0000000000000000  # Null segment
+	.quad 0x00cf9a000000ffff  # Kernel code
+	.quad 0x00cf92000000ffff  # Kernel data
+	.quad 0x00cffa000000ffff  # User code
+	.quad 0x00cff2000000ffff  # User data
+	.quad 0x0000890000000068  # TSS (base address field set later)
+
+gdt_desc:
+	.word gdt_desc - gdt - 1  # Size of GDT - 1
+	.long gdt                 # GDT pointer
+
+.align 4
+tss:
+	.long 0                   # Reserved
+	.long istack_top          # ESP0 (ESP for switch to ring 0)
+	.long KERNEL_DS           # SS0 (SS for switch to ring 0)
+	.skip 192
+
+################################################################################
+# Kernel entry point code. Sets the stack pointer, loads the GDT and TSS, sets
+# the segment registers properly, and then calls the C main() function to fully
+# initialize the kernel with a pointer to the info struct Multiboot gives us as
+# the single argument. main() shouldn't return, but if it does we just lock up
+# with an infinite loop.
+################################################################################
+
 .section .text
+
 .extern main
 .global start
+
 start:
-	movl $kstack_top, %esp
-	push %ebx
-	call main
-halt:
-	hlt
-	jmp halt
+	cli
+	mov $kstack_top, %esp
 
-# Initialize the Global Descriptor Table
-.extern gdt_ptr
-.global load_gdt
-load_gdt:
-	lgdt gdt_ptr
-	movw $0x10, %ax
-	movw %ax, %ds
-	movw %ax, %es
-	movw %ax, %fs
-	movw %ax, %gs
-	movw %ax, %ss
-	jmp $0x08, $long_jmp
-long_jmp:
-	mov $0x28, %ax
-	ltr %ax
-	ret
+	# Set TSS segment base pointer here because stupid assembler won't let
+	# us do logical operations to compute constants.
+	mov $tss, %eax
+	shl $16, %eax
+	or %eax, gdt + KERNEL_TS
+	mov $tss, %eax
+	shr $16, %eax
+	or %eax, gdt + KERNEL_TS + 4
 
-# Enable paging and virtual address translation
-.global enable_paging
-enable_paging:
-	movl $page_directory, %eax
-	movl %eax, %cr3
-	movl %cr0, %eax
-	orl $0x80010000, %eax
-	movl %eax, %cr0
-	ret
-
-# Flush the TLB after removing a page from the virtual mapping
-.global flush_tlb
-flush_tlb:
-	movl %cr3, %eax
-	movl %eax, %cr3
-	ret
-
-# Load the Interrupt Descriptor Table and enable interrupts
-.extern idt_ptr
-.global load_idt
-load_idt:
-	lidt idt_ptr
-	sti
-	ret
-
-# Jump to user code execution after kernel initialization
-.global jump_usermode
-jump_usermode:
-	mov $(0x20 | 3), %ax
+	mov $KERNEL_DS, %ax
 	mov %ax, %ds
 	mov %ax, %es
 	mov %ax, %fs
 	mov %ax, %gs
-	mov %esp, %eax
+	mov %ax, %ss
+	lgdt gdt_desc
+	jmp $KERNEL_CS, $1f
+1:
+	mov $KERNEL_TS, %ax
+	ltr %ax
+	mov $tss, %eax
 
-	push $(0x20 | 3)          # user stack segment
-	push %eax                 # user esp
-	pushf                     # user flags
-	push $(0x18 | 3)          # user code segment
-	push $test_user_function  # user eip
-	iret
+	push %ebx
+	call main
 
-test_user_function:
-	cli
-	push $0x0
-	push $0xff
+1:
+	hlt
+	jmp 1b
 
-//==============================================================================
-// Interrupt and Exception Routines
-//==============================================================================
+################################################################################
+# Miscellaneous paging-related functions called externally.
+################################################################################
 
-# Common interrupt handling code, which pushes an exception struct to the stack
-# and calls the handle_interrupt function in idt.c
-.extern handle_interrupt
-isr_common:
-	pusha
-	push %ss
-	push %ds
-	push %es
-	push %fs
-	push %gs
-	
-	movw $0x10, %ax
-	movw %ax, %ds
-	movw %ax, %es
-	movw %ax, %fs
-	movw %ax, %gs
+.global enable_paging
+.global set_cr3
+.global get_cr2
+.global flush_tlb
 
-	mov $handle_interrupt, %eax
-	call *%eax
+# Enable paging and virtual address translation
+enable_paging:
+	mov $page_directory, %eax
+	mov %eax, %cr3
+	mov %cr0, %eax
+	or $0x80010000, %eax
+	mov %eax, %cr0
+	ret
 
+# Set new CR3 value during task switch
+set_cr3:
+	pop %edx
 	pop %eax
-	pop %gs
-	pop %fs
-	pop %es
-	pop %ds
-	popa
-	add $8, %esp
-	iret
+	mov %eax, %cr3
+	push %edx
+	ret
 
-# Start processor exception handlers. All of them push the interrupt number to
-# the stack, which becomes exception.inum. Some also push a dummy error code
-# before that, which becomes exception.ecode, in cases where the processor
-# does not push an actual error code itself.
+# Flush the TLB after removing a page from the virtual mapping
+flush_tlb:
+	mov %cr3, %eax
+	mov %eax, %cr3
+	ret
 
-.global isr0
-isr0:
-	cli
-	push $0
-	push $0
-	jmp isr_common
 
-.global isr1
-isr1:
-	cli
-	push $0
-	push $1
-	jmp isr_common
 
-.global isr2
-isr2:
-	cli
-	push $0
-	push $2
-	jmp isr_common
 
-.global isr3
-isr3:
-	cli
-	push $0
-	push $3
-	jmp isr_common
 
-.global isr4
-isr4:
-	cli
-	push $0
-	push $4
-	jmp isr_common
-
-.global isr5
-isr5:
-	cli
-	push $0
-	push $5
-	jmp isr_common
-
-.global isr6
-isr6:
-	cli
-	push $0
-	push $6
-	jmp isr_common
-
-.global isr7
-isr7:
-	cli
-	push $0
-	push $7
-	jmp isr_common
-
-.global isr8
-isr8:
-	cli
-	push $8
-	jmp isr_common
-
-.global isr9
-isr9:
-	cli
-	push $0
-	push $9
-	jmp isr_common
-
-.global isr10
-isr10:
-	cli
-	push $10
-	jmp isr_common
-
-.global isr11
-isr11:
-	cli
-	push $11
-	jmp isr_common
-
-.global isr12
-isr12:
-	cli
-	push $12
-	jmp isr_common
-
-.global isr13
-isr13:
-	cli
-	push $13
-	jmp isr_common
-
-.global isr14
-isr14:
-	cli
-	push $14
-	jmp isr_common
-
-.global isr15
-isr15:
-	cli
-	push $0
-	push $15
-	jmp isr_common
-
-.global isr16
-isr16:
-	cli
-	push $0
-	push $16
-	jmp isr_common
-
-.global isr17
-isr17:
-	cli
-	push $0
-	push $17
-	jmp isr_common
-
-.global isr18
-isr18:
-	cli
-	push $0
-	push $18
-	jmp isr_common
-
-# Start external interrupt request handlers
-
-.global irq0
-irq0:
-	cli
-	push $0
-	push $32
-	jmp isr_common
-
-.global irq1
-irq1:
-	cli
-	push $0
-	push $33
-	jmp isr_common
-
-.global irq2
-irq2:
-	cli
-	push $0
-	push $34
-	jmp isr_common
-
-.global irq3
-irq3:
-	cli
-	push $0
-	push $35
-	jmp isr_common
-
-.global irq4
-irq4:
-	cli
-	push $0
-	push $36
-	jmp isr_common
-
-.global irq5
-irq5:
-	cli
-	push $0
-	push $37
-	jmp isr_common
-
-.global irq6
-irq6:
-	cli
-	push $0
-	push $38
-	jmp isr_common
-
-.global irq7
-irq7:
-	cli
-	push $0
-	push $39
-	jmp isr_common
-
-.global irq8
-irq8:
-	cli
-	push $0
-	push $40
-	jmp isr_common
-
-.global irq9
-irq9:
-	cli
-	push $0
-	push $41
-	jmp isr_common
-
-.global irq10
-irq10:
-	cli
-	push $0
-	push $42
-	jmp isr_common
-
-.global irq11
-irq11:
-	cli
-	push $0
-	push $43
-	jmp isr_common
-
-.global irq12
-irq12:
-	cli
-	push $0
-	push $44
-	jmp isr_common
-
-.global irq13
-irq13:
-	cli
-	push $0
-	push $45
-	jmp isr_common
-
-.global irq14
-irq14:
-	cli
-	push $0
-	push $46
-	jmp isr_common
-
-.global irq15
-irq15:
-	cli
-	push $0
-	push $47
-	jmp isr_common
+# Load the Interrupt Descriptor Table
+.extern idt_ptr
+.global load_idt
+load_idt:
+	lidt idt_ptr
+	ret

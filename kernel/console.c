@@ -168,6 +168,6 @@ void kprintf(char *fmt, ...)
 
 void kpanic(char *msg)
 {
-	kprintf("kernel panic: %s", msg);
+	kprintf("Kernel panic: %s", msg);
 	for (;;);
 }

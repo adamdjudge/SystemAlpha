@@ -1,7 +1,9 @@
 #include "types.h"
 #include "io.h"
 #include "console.h"
+#include "sched.h"
 
+#include "interrupt.h"
 #include "idt.h"
 
 /* PIC I/O ports */
@@ -139,94 +141,129 @@ void idt_init()
 }
 
 /* Install an IRQ handler to be called whenever that IRQ number is fired */
-void idt_install_isr(uint8_t irq_num, void (*handler)(struct exception*))
+void idt_install_isr(uint8_t irq_num, void (*handler)())
 {
 	if (irq_num > 15)
 		return;
 	irq_handlers[irq_num] = (uint32_t) handler;
 }
 
-static void dump_exception(struct exception *e)
+static void dump_exception()
 {
-	kprintf("dump exception:\n");
-	kprintf("  inum %d  ecode 0x%x  eflags 0x%x  eip 0x%x\n",
-	        e->inum, e->ecode, e->eflags, e->eip);
-	kprintf("  eax 0x%x  ebx 0x%x  ecx 0x%x  edx 0x%x\n",
-		e->eax, e->ebx, e->ecx, e->edx);
-	kprintf("  esi 0x%x  edi 0x%x  ebp 0x%x  esp 0x%x\n",
-		e->esi, e->edi, e->ebp, e->esp);
-	kprintf("  cs 0x%w  ds 0x%w  ss 0x%w  es 0x%w  fs 0x%w  gs 0x%w\n",
-		e->cs, e->ds, e->ss, e->es, e->fs, e->gs);
+	kprintf("\nException %d (%x):\n", except.eno, except.err);
+	kprintf("    EIP %x\n", except.regs.eip);
+	kprintf("    EAX %x  EBX %x  ECX %x  EDX %x\n",
+	        except.regs.eax, except.regs.ebx, except.regs.ecx, except.regs.edx);
+	kprintf("    ESI %x  EDI %x  EBP %x  ESP %x\n",
+	        except.regs.esi, except.regs.edi, except.regs.ebp, except.regs.esp);
+	kprintf("    EFL %x  CR0 %x  CR2 %x  CR3 %x\n",
+	        except.regs.eflags, except.cr0, except.cr2, except.cr3);
+	kprintf("    CS %w  DS %w  SS %w  ES %w  FS %w  GS %w\n\n",
+	        except.regs.cs, except.regs.ds, except.regs.ss, except.regs.es,
+		except.regs.fs, except.regs.gs);
 }
 
-/* Main interrupt handler, which both catches processor exceptions and redirects
+/* Main exception handler, which both catches processor exceptions and redirects
    interrupt requests to ISRs installed by drivers. Most processor exceptions
    cause a kernel panic if thrown from within kernel code, otherwise the
-   offending userland process is terminated. */
-void handle_interrupt(struct exception e)
+   offending user process is terminated. */
+void handle_exception()
 {
 	/* Call appropriate driver ISR (if installed) for IRQs */
-	if (e.inum >= INUM_ISR0) {
-		void (*handler)(struct exception*) =
-			(void (*)(struct exception*))
-			irq_handlers[e.inum - INUM_ISR0];
+	if (except.eno >= INUM_ISR0) {
+		void (*handler)() = (void (*)()) 
+		                    irq_handlers[except.eno - INUM_ISR0];
 		if (handler)
-			handler(&e);
+			handler();
 		
 		/* Send End of Interrupt command to the PIC(s) */
-		if (e.inum >= INUM_ISR8)
+		if (except.eno >= INUM_ISR8)
 			outb(PIC_SLAVE_CMD, 0x20);
 		outb(PIC_MASTER_CMD, 0x20);
 		return;
 	}
 	
 	/* Handle processor exceptions */
-	switch (e.inum) {
+	switch (except.eno) {
 	case INUM_DIVISION_BY_ZERO:
-		if (e.cs == 8) {
-			dump_exception(&e);
-			kpanic("kmode divide by zero exception");
+		if (except.regs.cs == 8) {
+			dump_exception();
+			kpanic("divide by zero exception");
 		}
+		else {
+			current->state = TASK_NONE;
+			kprintf("Divide by zero error: killed %d\n", current->pid);
+			schedule();
+			break;
+		}
+
 	case INUM_BREAKPOINT:
-		if (e.cs == 8) {
-			dump_exception(&e);
-			kpanic("kmode breakpoint");
+		if (except.regs.cs == 8) {
+			dump_exception();
+			kpanic("breakpoint exception");
 		}
+
 	case INUM_OUT_OF_BOUNDS:
-		if (e.cs == 8) {
-			dump_exception(&e);
-			kpanic("kmode out of bounds exception");
+		if (except.regs.cs == 8) {
+			dump_exception();
+			kpanic("out of bounds exception");
 		}
+		else {
+			current->state = TASK_NONE;
+			kprintf("Bounds error: killed %d\n", current->pid);
+			schedule();
+			break;
+		}
+
 	case INUM_INVALID_OPCODE:
-		if (e.cs == 8) {
-			dump_exception(&e);
-			kpanic("kmode invalid opcode");
+		if (except.regs.cs == 8) {
+			dump_exception();
+			kpanic("invalid opcode exception");
 		}
+		else {
+			current->state = TASK_NONE;
+			kprintf("Invalid opcode: killed %d\n", current->pid);
+			schedule();
+			break;
+		}
+
 	case INUM_DOUBLE_FAULT:
-		if (e.cs == 8) {
-			dump_exception(&e);
-			kpanic("kmode double fault exception");
-		}
+		dump_exception();
+		kpanic("double fault exception");
+
 	case INUM_STACK_FAULT:
-		if (e.cs == 8) {
-			dump_exception(&e);
-			kpanic("kmode stack fault exception");
+		if (except.regs.cs == 8) {
+			dump_exception();
+			kpanic("stack fault exception");
 		}
+
 	case INUM_GENERAL_PROTECTION_FAULT:
-		if (e.cs == 8) {
-			dump_exception(&e);
-			kpanic("kmode general protection fault exception");
+		if (except.regs.cs == 8) {
+			dump_exception();
+			kpanic("general protection fault");
 		}
+		else {
+			current->state = TASK_NONE;
+			kprintf("General protection fault: killed %d\n", current->pid);
+			schedule();
+			break;
+		}
+
 	case INUM_PAGE_FAULT:
-		if (e.cs == 8) {
-			dump_exception(&e);
-			kpanic("kmode page fault exception");
+		if (except.regs.cs == 8) {
+			dump_exception();
+			kpanic("unexpected page fault");
 		}
-	case INUM_UNKNOWN_INTERRUPT:
-		dump_exception(&e);
-		kpanic("unknown interrupt exception");
+		else {
+			/* To be potentially replaced by swapping someday... */
+			current->state = TASK_NONE;
+			kprintf("Page fault: killed %d\n", current->pid);
+			schedule();
+			break;
+		}
+
 	default:
-		dump_exception(&e);
+		dump_exception();
 		kpanic("unhandled exception");
 	}
 }
