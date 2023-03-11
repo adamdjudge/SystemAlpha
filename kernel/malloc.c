@@ -57,5 +57,8 @@ void *kmalloc(size_t size, uint32_t flags)
 
 void kfree(void *ptr)
 {
-        return;
+        uint32_t *head = (uint32_t*) ptr - 1;
+        if (!(*head & CHUNK_HEADER) || !(*head & CHUNK_ALLOCATED))
+                kpanic("kfree with invalid pointer");
+        *head &= ~CHUNK_ALLOCATED;
 }

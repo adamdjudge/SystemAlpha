@@ -26,6 +26,15 @@ static struct task *find_empty_task()
         return NULL;
 }
 
+struct task *get_process(int pid)
+{
+        for (int i = 0; i < NUM_TASKS; i++) {
+                if (process_table[i].pid == pid)
+                        return &process_table[i];
+        }
+        return NULL;
+}
+
 struct task *spawn_kernel_task(void (*code)())
 {
         struct task *t = find_empty_task();
@@ -91,14 +100,17 @@ void schedule()
         struct task *next = process_table;
         int i;
 
-        for (i = 0; i < NUM_TASKS; i++) {
+        for (i = 1; i < NUM_TASKS; i++) {
                 if (process_table[i].state != TASK_RUN)
                         continue;
+                if (next->pid == 0)
+                        /* Idle task only picked if everything else is asleep */
+                        next = &process_table[i];
                 if (process_table[i].counter > next->counter)
                         next = &process_table[i];
         }
 
-        for (i = 0; i < NUM_TASKS; i++)
+        for (i = 1; i < NUM_TASKS; i++)
                 process_table[i].counter++;
         next->counter = 0;
         
@@ -161,4 +173,14 @@ void sched_init()
         outb(PIT_DATA, TIMER_DIVIDER & 0xff);
         outb(PIT_DATA, (TIMER_DIVIDER >> 8) & 0xff);
         idt_install_isr(0, handle_timer);
+}
+
+/*
+ * The idle task, which the kernel jumps to after initializing everything. The
+ * scheduler only runs this process if there are no other running tasks.
+ */
+void idle_task()
+{
+        asm("sti");
+        for (;;) {}
 }

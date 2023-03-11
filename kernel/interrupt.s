@@ -84,7 +84,7 @@ isr_common:
         # interrupt, so we should store it directly. Otherwise we store the user
         # task's SS:ESP, which is on the stack.
 
-        cmp $KERNEL_CS, e_cs
+        cmpl $KERNEL_CS, e_cs
         jne .from_user
 
 .from_kernel:
@@ -137,7 +137,7 @@ isr_common:
         # Depending on whether we're returning to a user or kernel task, we must
         # either push SS:ESP or set ESP manually.
 
-        cmp $KERNEL_CS, e_cs
+        cmpl $KERNEL_CS, e_cs
         jne .iret_user
 
 .iret_kernel:
@@ -401,5 +401,12 @@ irq15:
 	cli
 	push $0
 	push $47
+	jmp isr_common
+
+.global isr_sys
+isr_sys:
+	cli
+	push $0
+	push $0xff
 	jmp isr_common
 

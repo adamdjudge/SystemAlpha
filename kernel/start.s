@@ -134,13 +134,14 @@ start:
 	jmp 1b
 
 ################################################################################
-# Miscellaneous paging-related functions called externally.
+# Miscellaneous assembly functions called externally.
 ################################################################################
 
 .global enable_paging
 .global set_cr3
-.global get_cr2
 .global flush_tlb
+.global load_idt
+.global _syscall
 
 # Enable paging and virtual address translation
 enable_paging:
@@ -153,25 +154,49 @@ enable_paging:
 
 # Set new CR3 value during task switch
 set_cr3:
-	pop %edx
-	pop %eax
+	mov 4(%esp), %eax
 	mov %eax, %cr3
-	push %edx
 	ret
 
-# Flush the TLB after removing a page from the virtual mapping
+# Flush the TLB by reinstalling the same CR3 value
 flush_tlb:
 	mov %cr3, %eax
 	mov %eax, %cr3
 	ret
 
-
-
-
-
 # Load the Interrupt Descriptor Table
 .extern idt_ptr
-.global load_idt
 load_idt:
 	lidt idt_ptr
+	ret
+
+# Perform a system call from a kernel task
+# int _syscall(in32_t header, in32_t *args)
+_syscall:
+	push %ebx
+	push %esi
+	push %edi
+
+	mov 20(%esp), %eax
+	mov 0(%eax), %ebx
+	mov 4(%eax), %ecx
+	mov 8(%eax), %edx
+	mov 12(%eax), %esi
+	mov 16(%eax), %edi
+
+	mov 16(%esp), %eax
+	int $255
+
+	push %eax
+	mov 24(%esp), %eax
+	mov %ebx, 0(%eax)
+	mov %ecx, 4(%eax)
+	mov %edx, 8(%eax)
+	mov %esi, 12(%eax)
+	mov %edi, 16(%eax)
+
+	pop %eax
+	pop %edi
+	pop %esi
+	pop %ebx
 	ret

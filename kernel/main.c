@@ -5,14 +5,34 @@
 #include "idt.h"
 #include "malloc.h"
 #include "sched.h"
+#include "syscall.h"
 
-void system_task()
+void sender_task()
 {
-        asm("sti");
-        for (;;) {
-                kprintf("hello from the system task\n");
-                for (int i = 0; i < 0x8ffffff; i++);
-        }
+	struct syscall_args args;
+	int i = 1, ret;
+
+	for (;;) {
+		sys_sleep(1000);
+		args._1 = i++;
+
+		ret = sys_send(2, &args);
+		if (ret < 0) {
+			kprintf("send failed: %d\n", -ret);
+			for (;;);
+		}
+	}
+}
+
+void receiver_task()
+{
+	struct syscall_args args;
+	int pid;
+
+	for (;;) {
+		pid = sys_recv(&args);
+		kprintf("message from pid %d: %d\n", pid, args._1);
+	}
 }
 
 void main(const uint32_t *multiboot_info)
@@ -31,12 +51,8 @@ void main(const uint32_t *multiboot_info)
 	kprintf("Upper memory: %dk\n", mem_upper);
 	if (mem_upper < 4096)
 		kpanic("upper memory size less than 4096k");
-	
-	struct task *t = spawn_user_process();
-	uint8_t *m = (uint8_t*) alloc_user_page(t, 0x80000000);
-	m[0] = 0x90;
-	m[1] = 0x90;
-	m[2] = 0xfa;
 
-	system_task();
+	spawn_kernel_task(sender_task);
+	spawn_kernel_task(receiver_task);
+	idle_task();
 }

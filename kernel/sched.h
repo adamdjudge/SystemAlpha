@@ -14,6 +14,8 @@
 
 #define NUM_TASKS 64
 
+#define MAX_MESSAGES 64
+
 /* Process state types */
 enum {
         TASK_NONE,
@@ -29,6 +31,13 @@ struct user_page {
         struct user_page *next;
 };
 
+/* List entry defining an outstanding message in a process's message queue */
+struct message {
+        int pid;
+        int args[5];
+        struct message *next;
+};
+
 /* Process table entry, containing a task's state */
 struct task {
         uint32_t state;
@@ -41,15 +50,20 @@ struct task {
 
         struct user_page *pages;
         struct user_page *page_tables;
+
+        struct message *mqueue;
+        int num_messages;
 };
+
+extern struct task *current;
+
+extern uint32_t jiffies;
 
 void sched_init();
 void schedule();
 struct task *spawn_user_process();
 struct task *spawn_kernel_task(void (*code)());
-
-extern struct task *current;
-
-extern uint32_t jiffies;
+struct task *get_process(int pid);
+void idle_task();
 
 #endif

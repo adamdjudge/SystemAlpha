@@ -3,7 +3,16 @@ AS = as --32
 LD = ld -melf_i386
 
 KERNEL = kernel.bin
-OBJ = boot.o main.o util.o paging.o console.o idt.o interrupt.o sched.o malloc.o
+OBJ = start.o \
+      main.o \
+      util.o \
+      paging.o \
+      console.o \
+      idt.o \
+      interrupt.o \
+      sched.o \
+      malloc.o \
+      syscall.o
 
 all: $(KERNEL)
 

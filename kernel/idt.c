@@ -2,6 +2,7 @@
 #include "io.h"
 #include "console.h"
 #include "sched.h"
+#include "syscall.h"
 
 #include "interrupt.h"
 #include "idt.h"
@@ -49,6 +50,7 @@ extern void irq12();
 extern void irq13();
 extern void irq14();
 extern void irq15();
+extern void isr_sys();
 
 extern void load_idt();
 
@@ -121,6 +123,9 @@ void idt_init()
 	idt_set_gate(46, (uint32_t) irq14);
 	idt_set_gate(47, (uint32_t) irq15);
 
+	/* System call handler */
+	idt_set_gate(255, (uint32_t) isr_sys);
+
 	/* Program the PICs to remap IRQs to the range 32-47 */
 	outb(PIC_MASTER_CMD, 0x11);
 	outb(PIC_SLAVE_CMD, 0x11);
@@ -169,15 +174,21 @@ static void dump_exception()
    offending user process is terminated. */
 void handle_exception()
 {
+	/* Handle system call */
+	if (except.eno == INUM_SYSCALL) {
+		handle_syscall();
+		return;
+	}
+
 	/* Call appropriate driver ISR (if installed) for IRQs */
-	if (except.eno >= INUM_ISR0) {
+	if (except.eno >= INUM_IRQ0 && except.eno <= INUM_IRQ15) {
 		void (*handler)() = (void (*)()) 
-		                    irq_handlers[except.eno - INUM_ISR0];
+		                    irq_handlers[except.eno - INUM_IRQ0];
 		if (handler)
 			handler();
 		
 		/* Send End of Interrupt command to the PIC(s) */
-		if (except.eno >= INUM_ISR8)
+		if (except.eno >= INUM_IRQ8)
 			outb(PIC_SLAVE_CMD, 0x20);
 		outb(PIC_MASTER_CMD, 0x20);
 		return;
