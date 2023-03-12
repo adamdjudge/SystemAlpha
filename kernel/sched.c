@@ -2,7 +2,6 @@
 #include "idt.h"
 #include "util.h"
 #include "io.h"
-#include "console.h"
 
 #include "sched.h"
 

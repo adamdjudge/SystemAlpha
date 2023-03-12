@@ -1,4 +1,4 @@
-#include "types.h"
+#include "kernel.h"
 #include "util.h"
 #include "paging.h"
 #include "console.h"
@@ -6,6 +6,11 @@
 #include "malloc.h"
 #include "sched.h"
 #include "syscall.h"
+
+static void printd(uint32_t val);
+static void printx16(uint32_t val);
+static void printx32(uint32_t val);
+static void prints(char *s);
 
 void sender_task()
 {
@@ -49,10 +54,90 @@ void main(const uint32_t *multiboot_info)
 	kprintf("(C) 2023 Adam Judge\n");
 
 	kprintf("Upper memory: %dk\n", mem_upper);
-	if (mem_upper < 4096)
-		kpanic("upper memory size less than 4096k");
+	if (mem_upper < 1024)
+		kpanic("upper memory size less than 1024k");
 
 	spawn_kernel_task(sender_task);
 	spawn_kernel_task(receiver_task);
 	idle_task();
+}
+
+void kprintf(char *fmt, ...)
+{
+	char *c;
+	uint32_t *argptr = (uint32_t*) &fmt + 1;
+
+	for (c = fmt; *c != '\0'; c++) {
+		if (*c != '%') {
+			putc(*c);
+			continue;
+		}
+
+		switch (*(++c)) {
+		case '%':
+			putc('%');
+			break;
+		case 'd':
+			printd(*(argptr++));
+			break;
+		case 'w':
+			printx16(*(argptr++));
+			break;
+		case 'x':
+			printx32(*(argptr++));
+			break;
+		case 's':
+			prints((char*) *(argptr++));
+			break;
+		default:
+			putc('%');
+			putc(*c);
+		}
+	}
+}
+
+void kpanic(char *msg)
+{
+	asm("cli");
+	kprintf("Kernel panic: %s", msg);
+	for (;;);
+}
+
+static void printd(uint32_t val)
+{
+	if (val / 10)
+		printd(val / 10);
+	putc('0' + val % 10);
+}
+
+static void printx16(uint32_t val)
+{
+	int i, digit;
+
+	for (i = 12; i >= 0; i -= 4) {
+		digit = (val >> i) & 0xf;
+		if (digit < 10)
+			putc('0' + digit);
+		else
+			putc('a' + digit-10);
+	}
+}
+
+static void printx32(uint32_t val)
+{
+	int i, digit;
+
+	for (i = 28; i >= 0; i -= 4) {
+		digit = (val >> i) & 0xf;
+		if (digit < 10)
+			putc('0' + digit);
+		else
+			putc('a' + digit-10);
+	}
+}
+
+static void prints(char *s)
+{
+	while (*s)
+		putc(*(s++));
 }

@@ -1,6 +1,6 @@
+#include "kernel.h"
 #include "util.h"
 #include "paging.h"
-#include "console.h"
 
 #include "malloc.h"
 

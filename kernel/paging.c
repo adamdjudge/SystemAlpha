@@ -1,6 +1,5 @@
-#include "types.h"
+#include "kernel.h"
 #include "util.h"
-#include "console.h"
 #include "sched.h"
 #include "malloc.h"
 

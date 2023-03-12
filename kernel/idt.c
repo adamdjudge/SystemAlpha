@@ -1,6 +1,5 @@
-#include "types.h"
+#include "kernel.h"
 #include "io.h"
-#include "console.h"
 #include "sched.h"
 #include "syscall.h"
 
