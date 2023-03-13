@@ -23,10 +23,10 @@ static int cur_screen;
 
 static void update_cursor()
 {
-	outb(INDEX_REG, POS_HIGH_INDEX);
-	outb(DATA_REG, screens[cur_screen].pos & 0xff);
-	outb(INDEX_REG, POS_LOW_INDEX);
-	outb(DATA_REG, (screens[cur_screen].pos >> 8) & 0xff);
+	outb(INDEX_REG, POS_HIGH_INDEX, false);
+	outb(DATA_REG, screens[cur_screen].pos & 0xff, false);
+	outb(INDEX_REG, POS_LOW_INDEX, false);
+	outb(DATA_REG, (screens[cur_screen].pos >> 8) & 0xff, false);
 }
 
 void switch_screen(int s)
@@ -56,10 +56,10 @@ void console_init()
 		console_clear(s);
 	switch_screen(0);
 
-	outb(INDEX_REG, START_SCAN_INDEX);
-	outb(DATA_REG, inb(DATA_REG) & 0xc0);
-	outb(INDEX_REG, END_SCAN_INDEX);
-	outb(DATA_REG, (inb(DATA_REG) & 0xe0) | 15);
+	outb(INDEX_REG, START_SCAN_INDEX, false);
+	outb(DATA_REG, inb(DATA_REG, false) & 0xc0, false);
+	outb(INDEX_REG, END_SCAN_INDEX, false);
+	outb(DATA_REG, (inb(DATA_REG, false) & 0xe0) | 15, false);
 }
 
 static void linefeed(int s)
@@ -68,8 +68,8 @@ static void linefeed(int s)
 	char *dst, *src;
 
 	for (line = 1; line < CONSOLE_HEIGHT; line++) {
-		dst = screens[cur_screen].buf + (line-1) * 2*CONSOLE_WIDTH;
-		src = screens[cur_screen].buf + line * 2*CONSOLE_WIDTH;
+		dst = screens[s].buf + (line-1) * 2*CONSOLE_WIDTH;
+		src = screens[s].buf + line * 2*CONSOLE_WIDTH;
 		memcpy(dst, src, 2*CONSOLE_WIDTH);
 
 		if (s == cur_screen) {
@@ -81,7 +81,7 @@ static void linefeed(int s)
 
 	bottom = (CONSOLE_HEIGHT - 1) * CONSOLE_WIDTH;
 	for (i = 0; i < CONSOLE_WIDTH; i++) {
-		screens[cur_screen].buf[2*(bottom+i)] = '\0';
+		screens[s].buf[2*(bottom+i)] = '\0';
 		if (s == cur_screen)
 			text_mem[2*(bottom+i)] = '\0';
 	}
@@ -89,16 +89,16 @@ static void linefeed(int s)
 
 static int write_screen(int s, char c)
 {
-	int pos = 2 * screens[cur_screen].pos;
-	screens[cur_screen].buf[pos] = c;
-	screens[cur_screen].buf[pos+1] = screens[cur_screen].color;
+	int pos = 2 * screens[s].pos;
+	screens[s].buf[pos] = c;
+	screens[s].buf[pos+1] = screens[cur_screen].color;
 	if (s == cur_screen) {
 		text_mem[pos] = c;
 		text_mem[pos+1] = screens[cur_screen].color;
 	}
 }
 
-static void put_char(int s, char c)
+void put_char(int s, char c)
 {
 	int i;
 
@@ -133,5 +133,5 @@ static void put_char(int s, char c)
 
 void putc(char c)
 {
-	put_char(cur_screen, c);
+	put_char(0, c);
 }

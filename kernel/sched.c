@@ -168,9 +168,9 @@ void sched_init()
         process_table[0].state = TASK_RUN;
 
         /* Set up the PIT */
-        outb(PIT_CMD, 0x36); /* binary, rate generator, 16-bit, counter 0 */
-        outb(PIT_DATA, TIMER_DIVIDER & 0xff);
-        outb(PIT_DATA, (TIMER_DIVIDER >> 8) & 0xff);
+        outb(PIT_CMD, 0x36, false); /* binary, rate gen, 16-bit, counter 0 */
+        outb(PIT_DATA, TIMER_DIVIDER & 0xff, false);
+        outb(PIT_DATA, (TIMER_DIVIDER >> 8) & 0xff, false);
         idt_install_isr(0, handle_timer);
 }
 

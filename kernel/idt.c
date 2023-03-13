@@ -126,16 +126,16 @@ void idt_init()
 	idt_set_gate(255, (uint32_t) isr_sys);
 
 	/* Program the PICs to remap IRQs to the range 32-47 */
-	outb(PIC_MASTER_CMD, 0x11);
-	outb(PIC_SLAVE_CMD, 0x11);
-	outb(PIC_MASTER_DATA, 0x20);
-	outb(PIC_SLAVE_DATA, 0x28);
-	outb(PIC_MASTER_DATA, 0x04);
-	outb(PIC_SLAVE_DATA, 0x02);
-	outb(PIC_MASTER_DATA, 0x01);
-	outb(PIC_SLAVE_DATA, 0x01);
-	outb(PIC_MASTER_DATA, 0x00);
-	outb(PIC_SLAVE_DATA, 0x00);
+	outb(PIC_MASTER_CMD, 0x11, true);
+	outb(PIC_SLAVE_CMD, 0x11, true);
+	outb(PIC_MASTER_DATA, 0x20, true);
+	outb(PIC_SLAVE_DATA, 0x28, true);
+	outb(PIC_MASTER_DATA, 0x04, true);
+	outb(PIC_SLAVE_DATA, 0x02, true);
+	outb(PIC_MASTER_DATA, 0x01, true);
+	outb(PIC_SLAVE_DATA, 0x01, true);
+	outb(PIC_MASTER_DATA, 0x00, true);
+	outb(PIC_SLAVE_DATA, 0x00, true);
 
 	/* Set up IDT pointer and call load_idt (in boot.s), which both loads
 	   the IDT and enables interrupts */
@@ -188,8 +188,8 @@ void handle_exception()
 		
 		/* Send End of Interrupt command to the PIC(s) */
 		if (except.eno >= INUM_IRQ8)
-			outb(PIC_SLAVE_CMD, 0x20);
-		outb(PIC_MASTER_CMD, 0x20);
+			outb(PIC_SLAVE_CMD, 0x20, false);
+		outb(PIC_MASTER_CMD, 0x20, false);
 		return;
 	}
 	

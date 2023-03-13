@@ -10,6 +10,7 @@
 void console_init();
 void console_clear();
 void putc(char c);
+void put_char(int s, char c);
 void switch_screen(int s);
 
 #endif

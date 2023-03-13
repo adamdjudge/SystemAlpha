@@ -6,8 +6,10 @@ KERNEL = kernel.bin
 OBJ = start.o \
       main.o \
       util.o \
+      io.o \
       paging.o \
       console.o \
+      keyboard.o \
       idt.o \
       interrupt.o \
       sched.o \

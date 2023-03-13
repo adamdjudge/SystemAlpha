@@ -15,4 +15,9 @@ typedef unsigned int size_t;
 
 #define NULL (void*) 0
 
+typedef enum {
+        false = 0,
+        true = 1
+} bool;
+
 #endif
