@@ -8,38 +8,12 @@
 #include "sched.h"
 #include "syscall.h"
 
+#include "../drivers/tty.h"
+
 static void printd(uint32_t val);
 static void printx16(uint32_t val);
 static void printx32(uint32_t val);
 static void prints(char *s);
-
-void sender_task()
-{
-	struct syscall_args args;
-	int i = 1, ret;
-
-	for (;;) {
-		sys_sleep(1000);
-		args._1 = i++;
-
-		ret = sys_send(2, &args);
-		if (ret < 0) {
-			kprintf("send failed: %d\n", -ret);
-			for (;;);
-		}
-	}
-}
-
-void receiver_task()
-{
-	struct syscall_args args;
-	int pid;
-
-	for (;;) {
-		pid = sys_recv(&args);
-		kprintf("message from pid %d: %d\n", pid, args._1);
-	}
-}
 
 void main(const uint32_t *multiboot_info)
 {
@@ -59,8 +33,8 @@ void main(const uint32_t *multiboot_info)
 	if (mem_upper < 1024)
 		kpanic("upper memory size less than 1024k");
 
-	spawn_kernel_task(sender_task);
-	spawn_kernel_task(receiver_task);
+	tty_init();
+
 	idle_task();
 }
 

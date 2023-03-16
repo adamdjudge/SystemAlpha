@@ -1,58 +1,4 @@
-################################################################################
-# Global struct for stashing the current registers during an exception, and also
-# contains the exception number and error code. During a task switch, the
-# contents of this struct are copied to the current task's process table entry
-# and the next task's registers are copied in. This structure is also defined in
-# interrupt.h for C usage.
-################################################################################
-
-.section .bss
-
-.global except
-
-except:
-e_eax:
-	.skip 4
-e_ebx:
-	.skip 4
-e_ecx:
-	.skip 4
-e_edx:
-	.skip 4
-e_esi:
-	.skip 4
-e_edi:
-	.skip 4
-e_esp:
-	.skip 4
-e_ebp:
-	.skip 4
-e_eflags:
-	.skip 4
-e_eip:
-	.skip 4
-e_cs:
-	.skip 4
-e_ds:
-	.skip 4
-e_ss:
-	.skip 4
-e_es:
-	.skip 4
-e_fs:
-	.skip 4
-e_gs:
-	.skip 4
-e_cr0:
-	.skip 4
-e_cr2:
-	.skip 4
-e_cr3:
-	.skip 4
-e_eno:
-	.skip 4
-e_err:
-	.skip 4
+.section .text
 
 ################################################################################
 # Common exception handler, called by all the stubs for individual exception
@@ -60,103 +6,53 @@ e_err:
 #
 #     exception number, error code, EIP, CS, EFLAGS, (ESP, SS)
 #
-# where SS:ESP was only pushed if we came from user mode. We need to copy these,
-# and all the other registers, into the global exception struct to be used by
-# the C exception handler, and then copy them back to either return to the task
-# that was interrupted, or a different task if a process switch occurs. However,
-# we need to account for the fact that behavior is different depending on
-# whether we're coming from/going to a user or kernel task.
+# where SS:ESP was only pushed if we came from user mode. We also need to push
+# all the other registers to preserve task state, and then we can call the main
+# exception handling code in C.
 ################################################################################
 
-.section .text
-
 .extern handle_exception
-.set KERNEL_CS, 0x8
+.global iret_to_task
+
+.set KERNEL_DS, 0x10
 
 isr_common:
-        pop e_eno
-        pop e_err
-        pop e_eip
-        pop e_cs
-        pop e_eflags
+	push %gs
+	push %fs
+	push %es
+	push %ds
+	pusha
 
-        # If we came from the kernel task, ESP is now where it was before the
-        # interrupt, so we should store it directly. Otherwise we store the user
-        # task's SS:ESP, which is on the stack.
-
-        cmpl $KERNEL_CS, e_cs
-        jne .from_user
-
-.from_kernel:
-        mov %esp, e_esp
-        mov %ss, e_ss
-        jmp .do_handler
-
-.from_user:
-        pop e_esp
-        pop e_ss
-
-        # Now we stash all the other registers and call the main exception
-        # handling code, defined as a C function, and then restore everything.
-
-.do_handler:
-        mov %eax, e_eax
-        mov %ebx, e_ebx
-        mov %ecx, e_ecx
-        mov %edx, e_edx
-        mov %esi, e_esi
-        mov %edi, e_edi
-        mov %ebp, e_ebp
-        mov %ds, e_ds
-        mov %es, e_es
-        mov %fs, e_fs
-        mov %gs, e_gs
-
-	mov %cr0, %eax
-	mov %eax, e_cr0
-	mov %cr2, %eax
-	mov %eax, e_cr2
 	mov %cr3, %eax
-	mov %eax, e_cr3
+	push %eax
+	mov %cr1, %eax
+	push %eax
+	mov %cr0, %eax
+	push %eax
+
+	mov $KERNEL_DS, %ax
+	mov %ax, %ds
+	mov %ax, %es
+	mov %ax, %fs
+	mov %ax, %gs
 
         call handle_exception
 
-        mov e_eax, %eax
-        mov e_ebx, %ebx
-        mov e_ecx, %ecx
-        mov e_edx, %edx
-        mov e_esi, %esi
-        mov e_edi, %edi
-        mov e_ebp, %ebp
-        mov e_ds, %ds
-        mov e_es, %es
-        mov e_fs, %fs
-        mov e_gs, %gs
-
-        # Finally we need to set up the stack for an iret back to the task.
-        # Depending on whether we're returning to a user or kernel task, we must
-        # either push SS:ESP or set ESP manually.
-
-        cmpl $KERNEL_CS, e_cs
-        jne .iret_user
-
-.iret_kernel:
-        mov e_esp, %esp
-        push e_eflags
-        push e_cs
-        push e_eip
-        iret
-
-.iret_user:
-        push e_ss
-        push e_esp
-        push e_eflags
-        push e_cs
-        push e_eip
-        iret
+	# When a new task is created, its kernel stack is filled in so that when
+	# it's scheduled for the first time, it returns to here, where it does
+	# an iret to start running user code.
+iret_to_task:
+	add 12, %esp # Discard cr0, cr1, and cr3
+	popa
+	pop %ds
+	pop %es
+	pop %fs
+	pop %gs
+	add 8, %esp # Discard eno and err
+	iret
 
 ################################################################################
-# Start processor exception handlers. All of them push the interrupt number to
+# Start processor interrupt vectors. All of them push the interrupt number to
 # the stack, which becomes exception.ino. Some also push a dummy error code
 # before that, which becomes exception.err, in cases where the processor does
 # not push an actual error code itself.
@@ -403,10 +299,12 @@ irq15:
 	push $47
 	jmp isr_common
 
+# System call interrupt handler
+
 .global isr_sys
 isr_sys:
 	cli
 	push $0
-	push $0xff
+	push $255
 	jmp isr_common
 

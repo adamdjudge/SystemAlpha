@@ -150,7 +150,8 @@ uint32_t vtophys(uint32_t vaddr)
 /*
  * Allocates a page for use by a user process at the specified address within
  * that process's virtual address space. This page is also mapped into kernel
- * space so that the kernel can access it.
+ * space so that the kernel can access it, and this kernel virtual address is
+ * returned on success.
  */
 uint32_t alloc_user_page(struct task *t, uint32_t uvaddr)
 {
@@ -159,7 +160,10 @@ uint32_t alloc_user_page(struct task *t, uint32_t uvaddr)
 	int tabent = (uvaddr >> 12) & 0x3ff;
 	uint32_t tabpage;
 
-	if (!(t->page_dir[dirent] & PAGE_PRESENT)) {
+	if (!(t->pdir[dirent] & PAGE_PRESENT)) {
+		/* If a page table covering the address we want to map to does
+		   not already exist, we need to allocate one and add it to the
+		   process's page directory. */
 		newtab = kmalloc(sizeof(struct user_page), 0);
 		if (!newtab)
 			return 0;
@@ -167,31 +171,40 @@ uint32_t alloc_user_page(struct task *t, uint32_t uvaddr)
 		tabpage = alloc_kernel_page(PAGE_WRITABLE);
 		if (!tabpage)
 			return 0;
-		t->page_dir[dirent] = vtophys(tabpage) | PAGE_PRESENT
-		                      | PAGE_WRITABLE | PAGE_USER;
-		
 		newtab->kvaddr = tabpage;
-		newtab->next = t->page_tables;
-		t->page_tables = newtab;
+		t->pdir[dirent] = vtophys(tabpage) | PAGE_PRESENT
+		                  | PAGE_WRITABLE | PAGE_USER;
+
+		/* Add to the list of the process's page tables. */
+		newtab->next = t->ptabs;
+		t->ptabs = newtab;
 	}
 	else {
-		newtab = t->page_tables;
-		while (vtophys(newtab->kvaddr) != (t->page_dir[dirent] & ~0xfff))
+		/* If the page table already exists, find it in the list. */
+		newtab = t->ptabs;
+		while (vtophys(newtab->kvaddr) != (t->pdir[dirent] & ~0xfff))
 			newtab = newtab->next;
 		tabpage = newtab->kvaddr;
 	}
 	
+	/* Now we can create a new entry in the process's page list, and
+	   allocate a page in the kernel's virtual address space to use. */
 	newpg = kmalloc(sizeof(struct user_page), 0);
 	if (!newpg)
 		return 0;
-	
+
 	newpg->kvaddr = alloc_kernel_page(PAGE_USER | PAGE_WRITABLE);
-	if (!newpg->kvaddr)
+	if (!newpg->kvaddr) {
+		kfree(newpg);
 		return 0;
-	
+	}
+
+	/* We *also* map this same page into user address space by adding it to
+	   the page table we either found or created earlier. */
 	newpg->uvaddr = uvaddr;
 	((uint32_t*) tabpage)[tabent] = vtophys(newpg->kvaddr) | PAGE_PRESENT
 	                                | PAGE_WRITABLE | PAGE_USER;
+
 	newpg->next = t->pages;
 	t->pages = newpg;
 

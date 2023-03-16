@@ -12,12 +12,6 @@ struct syscall_args {
 };
 
 enum {
-        SYS_SEND = 1,
-        SYS_RECV,
-        SYS_SLEEP,
-};
-
-enum {
         SUCCESS,
         EINVAL,
         ENOSYS,
@@ -27,9 +21,5 @@ enum {
 };
 
 void handle_syscall();
-
-int sys_send();
-int sys_recv();
-int sys_sleep(int millis);
 
 #endif

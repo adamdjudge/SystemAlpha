@@ -15,28 +15,21 @@
 
 ################################################################################
 # Here we statically define a few buffers used in kernel initialization before
-# we have dynamic memory allocation. First is the kernel stack, which is used
-# during startup and then handed over to the system task, as well as a second
-# stack that is switched to (via the TSS) when interrupting to kernel mode from
-# a user task. We also need to create the initial page directory and page table
-# so we can set up virtual memory paging.
+# we have dynamic memory allocation. These are the kernel stack, which is used
+# during startup, and the initial page directory and page table, needed to set
+# up virtual memory paging.
 ################################################################################
 
 .section .bss
 .align 4096
 
 .global kstack_top
-.global istack_top
 .global page_directory
 .global page_table
 
 kstack_bottom:
 	.skip 4096
 kstack_top:
-
-istack_bottom:
-	.skip 4096
-istack_top:
 
 page_directory:
 	.skip 4096
@@ -64,6 +57,8 @@ page_table:
 .section .data
 .align 8
 
+.global tss
+
 .set KERNEL_CS, 0x8
 .set KERNEL_DS, 0x10
 .set KERNEL_TS, 0x28
@@ -83,8 +78,8 @@ gdt_desc:
 .align 4
 tss:
 	.long 0                   # Reserved
-	.long istack_top          # ESP0 (ESP for switch to ring 0)
-	.long KERNEL_DS           # SS0 (SS for switch to ring 0)
+	.long 0                   # ESP0, set when task switching
+	.long KERNEL_DS           # SS0
 	.skip 192
 
 ################################################################################
@@ -138,12 +133,11 @@ start:
 ################################################################################
 
 .global enable_paging
-.global set_cr3
 .global flush_tlb
 .global load_idt
-.global _syscall
+.global switch_task
 
-# Enable paging and virtual address translation
+# Enable paging and virtual address translation.
 enable_paging:
 	mov $page_directory, %eax
 	mov %eax, %cr3
@@ -152,51 +146,34 @@ enable_paging:
 	mov %eax, %cr0
 	ret
 
-# Set new CR3 value during task switch
-set_cr3:
-	mov 4(%esp), %eax
-	mov %eax, %cr3
-	ret
-
-# Flush the TLB by reinstalling the same CR3 value
+# Flush the TLB by reinstalling the same CR3 value.
 flush_tlb:
 	mov %cr3, %eax
 	mov %eax, %cr3
 	ret
 
-# Load the Interrupt Descriptor Table
+# Load the Interrupt Descriptor Table.
 .extern idt_ptr
 load_idt:
 	lidt idt_ptr
 	ret
 
-# Perform a system call from a kernel task
-# int _syscall(in32_t header, in32_t *args)
-_syscall:
-	push %ebx
-	push %esi
-	push %edi
+# Performs the switch to the next task by swapping the current kernel stack,
+# TSS.ESP0, CR3, and the global current task pointer.
+.extern current
+.extern _next
+switch_task:
+	pusha
+	mov current, %edi
+	mov _next, %esi
 
-	mov 20(%esp), %eax
-	mov 0(%eax), %ebx
-	mov 4(%eax), %ecx
-	mov 8(%eax), %edx
-	mov 12(%eax), %esi
-	mov 16(%eax), %edi
+	mov %esp, 0(%edi)
+	mov 0(%esi), %esp
+	mov 4(%esi), %eax
+	mov %eax, tss+4
+	mov 8(%esi), %eax
+	mov %eax, %cr3
 
-	mov 16(%esp), %eax
-	int $255
-
-	push %eax
-	mov 24(%esp), %eax
-	mov %ebx, 0(%eax)
-	mov %ecx, 4(%eax)
-	mov %edx, 8(%eax)
-	mov %esi, 12(%eax)
-	mov %edi, 16(%eax)
-
-	pop %eax
-	pop %edi
-	pop %esi
-	pop %ebx
+	mov %esi, current
+	popa
 	ret

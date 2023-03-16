@@ -5,16 +5,17 @@
 
 #include "sched.h"
 
-extern void set_cr3(uint32_t);
+extern void switch_task();
+
 extern uint32_t page_directory[];
 
 static struct task process_table[NUM_TASKS];
 static uint32_t next_pid;
+static uint32_t schedule_timer;
 
 struct task *current;
+struct task *_next;
 uint32_t jiffies;
-
-static uint32_t schedule_timer;
 
 static struct task *find_empty_task()
 {
@@ -27,6 +28,9 @@ static struct task *find_empty_task()
 
 struct task *get_process(int pid)
 {
+        if (!pid)
+                return NULL;
+
         for (int i = 0; i < NUM_TASKS; i++) {
                 if (process_table[i].pid == pid)
                         return &process_table[i];
@@ -34,11 +38,12 @@ struct task *get_process(int pid)
         return NULL;
 }
 
-struct task *spawn_kernel_task(void (*code)())
+struct task *spawn_kthread(void (*code)())
 {
         struct task *t = find_empty_task();
+        memset(t, 0, sizeof(*t));
 
-        t->page_dir = page_directory;
+        t->pdir = page_directory;
         t->cr3 = (uint32_t) page_directory;
         t->regs.cs = 0x8;
         t->regs.ds = 0x10;
@@ -49,8 +54,6 @@ struct task *spawn_kernel_task(void (*code)())
         t->regs.eflags = 1 << 9; // enable interrupts
         t->regs.eip = (uint32_t) code;
         t->regs.esp = alloc_kernel_page(PAGE_WRITABLE) + PAGE_SIZE;
-        t->regs.eax = t->pid = next_pid++;
-        t->counter = 0;
         t->state = TASK_RUN;
 
         return t;
@@ -59,12 +62,19 @@ struct task *spawn_kernel_task(void (*code)())
 struct task *spawn_user_process()
 {
         struct task *t = find_empty_task();
+        memset(t, 0, sizeof(*t));
         
-        t->page_dir = (uint32_t*) alloc_kernel_page(PAGE_WRITABLE);
-        if (!t->page_dir)
+        t->pdir = (uint32_t*) alloc_kernel_page(PAGE_WRITABLE);
+        if (!t->pdir)
                 return NULL;
-        t->cr3 = vtophys((uint32_t) t->page_dir);
-        memcpy(t->page_dir, process_table[0].page_dir, PAGE_SIZE);
+        t->cr3 = vtophys((uint32_t) t->pdir);
+        memcpy(t->pdir, process_table[0].pdir, PAGE_SIZE);
+
+        t->kstack = alloc_kernel_page(PAGE_WRITABLE);
+        if (!t->kstack) {
+                free_page(t->cr3);
+                return NULL;
+        }
         
         t->regs.cs = 0x1b;
         t->regs.ds = 0x23;
@@ -82,21 +92,11 @@ struct task *spawn_user_process()
         return t;
 }
 
-static void switch_task(struct task *next)
-{
-        current->regs = except.regs;
-        except.regs = next->regs;
-        if (except.cr3 != next->cr3)
-                set_cr3(next->cr3);
-        current = next;
-}
-
 /*
  * Selects the next running task to grant CPU time and switches to it.
  */
 void schedule()
 {
-        struct task *next = process_table;
         int i;
 
         for (i = 1; i < NUM_TASKS; i++) {
@@ -113,8 +113,8 @@ void schedule()
                 process_table[i].counter++;
         next->counter = 0;
         
-        switch_task(next);
         schedule_timer = 10;
+        switch_task();
 }
 
 /*
@@ -129,25 +129,19 @@ static void handle_timer()
         jiffies++;
         schedule_timer--;
 
-        for (i = 0; i < NUM_TASKS; i++) {
-                if (process_table[i].state != TASK_SLEEP)
-                        continue;
-                else if (process_table[i].timer < 10)
-                        process_table[i].timer = 0;
-                else
-                        process_table[i].timer -= 10;
-        }
+        current->rtime++;
+        if (in_kernel(current))
+                current->ktime++;
+        else
+                current->utime++;
 
-        /* Switch to task early if its timer has expired */
         for (i = 0; i < NUM_TASKS; i++) {
-                if (process_table[i].state == TASK_SLEEP
-                    && process_table[i].timer == 0)
-                {
-                        process_table[i].state = TASK_RUN;
-                        process_table[i].counter = 0xfffffff;
-                        schedule();
-                        return;
-                }
+                if (!process_table[i].alarm)
+                        continue;
+                else if (process_table[i].alarm < 10)
+                        process_table[i].alarm = 0;
+                else
+                        process_table[i].alarm -= 10;
         }
 
         if (schedule_timer == 0)
@@ -162,8 +156,8 @@ void sched_init()
         schedule_timer = 10;
         current = process_table;
 
-        /* Initialize the system process, which main() jumps to later */
-        process_table[0].page_dir = page_directory;
+        /* Initialize the idle task, which main() jumps to later */
+        process_table[0].pdir = page_directory;
         process_table[0].cr3 = (uint32_t) page_directory;
         process_table[0].state = TASK_RUN;
 

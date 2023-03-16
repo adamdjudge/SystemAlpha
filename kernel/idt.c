@@ -12,7 +12,7 @@
 #define PIC_SLAVE_CMD 0xA0
 #define PIC_SLAVE_DATA 0xA1
 
-/* External interrupt entry points defined in boot.s, all of which push an
+/* External interrupt entry points defined in interrupts.s, all of which push an
    exception structure to the stack and call handle_interrupt */
 extern void isr0();
 extern void isr1();
@@ -80,6 +80,14 @@ static void idt_set_gate(uint8_t inum, uint32_t base)
 /* Array of IRQ handlers installable by drivers */
 static uint32_t irq_handlers[16] = {0};
 
+/* Install an IRQ handler to be called whenever that IRQ number is fired */
+void idt_install_isr(uint8_t irq_num, void (*handler)())
+{
+	if (irq_num > 15)
+		return;
+	irq_handlers[irq_num] = (uint32_t) handler;
+}
+
 /* Initialize and load the IDT, and enable interrupts */
 void idt_init()
 {
@@ -144,60 +152,47 @@ void idt_init()
 	load_idt();
 }
 
-/* Install an IRQ handler to be called whenever that IRQ number is fired */
-void idt_install_isr(uint8_t irq_num, void (*handler)())
+static void dump_exception(struct exception *e)
 {
-	if (irq_num > 15)
-		return;
-	irq_handlers[irq_num] = (uint32_t) handler;
-}
-
-static void dump_exception()
-{
-	kprintf("\nException %d (%x):\n", except.eno, except.err);
-	kprintf("    EIP %x\n", except.regs.eip);
+	kprintf("\nException %d (%x):\n", e->eno, e->err);
+	kprintf("    EIP %x  PID %d\n", e->eip, current->pid);
 	kprintf("    EAX %x  EBX %x  ECX %x  EDX %x\n",
-	        except.regs.eax, except.regs.ebx, except.regs.ecx, except.regs.edx);
+	        e->eax, e->ebx, e->ecx, e->edx);
 	kprintf("    ESI %x  EDI %x  EBP %x  ESP %x\n",
-	        except.regs.esi, except.regs.edi, except.regs.ebp, except.regs.esp);
+	        e->esi, e->edi, e->ebp, e->esp);
 	kprintf("    EFL %x  CR0 %x  CR2 %x  CR3 %x\n",
-	        except.regs.eflags, except.cr0, except.cr2, except.cr3);
-	kprintf("    CS %w  DS %w  SS %w  ES %w  FS %w  GS %w\n\n",
-	        except.regs.cs, except.regs.ds, except.regs.ss, except.regs.es,
-		except.regs.fs, except.regs.gs);
+	        e->eflags, e->cr0, e->cr2, e->cr3);
 }
 
 /* Main exception handler, which both catches processor exceptions and redirects
-   interrupt requests to ISRs installed by drivers. Most processor exceptions
-   cause a kernel panic if thrown from within kernel code, otherwise the
-   offending user process is terminated. */
-void handle_exception()
+   interrupt requests to ISRs installed by drivers. */
+void handle_exception(struct exception e)
 {
 	/* Handle system call */
-	if (except.eno == INUM_SYSCALL) {
-		handle_syscall();
+	if (e.eno == INUM_SYSCALL) {
+		handle_syscall(&e);
 		return;
 	}
 
 	/* Call appropriate driver ISR (if installed) for IRQs */
-	if (except.eno >= INUM_IRQ0 && except.eno <= INUM_IRQ15) {
+	if (e.eno >= INUM_IRQ0 && e.eno <= INUM_IRQ15) {
 		void (*handler)() = (void (*)()) 
-		                    irq_handlers[except.eno - INUM_IRQ0];
+		                    irq_handlers[e.eno - INUM_IRQ0];
 		if (handler)
 			handler();
 		
 		/* Send End of Interrupt command to the PIC(s) */
-		if (except.eno >= INUM_IRQ8)
+		if (e.eno >= INUM_IRQ8)
 			outb(PIC_SLAVE_CMD, 0x20, false);
 		outb(PIC_MASTER_CMD, 0x20, false);
 		return;
 	}
 	
 	/* Handle processor exceptions */
-	switch (except.eno) {
+	switch (e.eno) {
 	case INUM_DIVISION_BY_ZERO:
-		if (except.regs.cs == 8) {
-			dump_exception();
+		if (kernel_exception(e)) {
+			dump_exception(&e);
 			kpanic("divide by zero exception");
 		}
 		else {
@@ -208,14 +203,14 @@ void handle_exception()
 		}
 
 	case INUM_BREAKPOINT:
-		if (except.regs.cs == 8) {
-			dump_exception();
+		if (kernel_exception(e)) {
+			dump_exception(&e);
 			kpanic("breakpoint exception");
 		}
 
 	case INUM_OUT_OF_BOUNDS:
-		if (except.regs.cs == 8) {
-			dump_exception();
+		if (kernel_exception(e)) {
+			dump_exception(&e);
 			kpanic("out of bounds exception");
 		}
 		else {
@@ -226,8 +221,8 @@ void handle_exception()
 		}
 
 	case INUM_INVALID_OPCODE:
-		if (except.regs.cs == 8) {
-			dump_exception();
+		if (kernel_exception(e)) {
+			dump_exception(&e);
 			kpanic("invalid opcode exception");
 		}
 		else {
@@ -238,18 +233,18 @@ void handle_exception()
 		}
 
 	case INUM_DOUBLE_FAULT:
-		dump_exception();
+		dump_exception(&e);
 		kpanic("double fault exception");
 
 	case INUM_STACK_FAULT:
-		if (except.regs.cs == 8) {
-			dump_exception();
+		if (kernel_exception(e)) {
+			dump_exception(&e);
 			kpanic("stack fault exception");
 		}
 
 	case INUM_GENERAL_PROTECTION_FAULT:
-		if (except.regs.cs == 8) {
-			dump_exception();
+		if (kernel_exception(e)) {
+			dump_exception(&e);
 			kpanic("general protection fault");
 		}
 		else {
@@ -260,8 +255,8 @@ void handle_exception()
 		}
 
 	case INUM_PAGE_FAULT:
-		if (except.regs.cs == 8) {
-			dump_exception();
+		if (kernel_exception(e)) {
+			dump_exception(&e);
 			kpanic("unexpected page fault");
 		}
 		else {
@@ -273,7 +268,7 @@ void handle_exception()
 		}
 
 	default:
-		dump_exception();
+		dump_exception(&e);
 		kpanic("unhandled exception");
 	}
 }

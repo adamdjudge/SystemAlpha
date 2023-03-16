@@ -14,8 +14,6 @@
 
 #define NUM_TASKS 64
 
-#define MAX_MESSAGES 64
-
 /* Process state types */
 enum {
         TASK_NONE,
@@ -31,38 +29,42 @@ struct user_page {
         struct user_page *next;
 };
 
-/* List entry defining an outstanding message in a process's message queue */
-struct message {
-        int pid;
-        int args[5];
-        struct message *next;
-};
-
 /* Process table entry, containing a task's state */
 struct task {
+        /* Used for task switching */
+        uint32_t esp;
+        uint32_t tss_esp0;
+        uint32_t cr3;
+
         uint32_t state;
         uint32_t pid;
-        struct registers regs;
-        uint32_t cr3;
-        uint32_t *page_dir;
+
+        /* Scheduling and timekeeping */
         uint32_t counter;
-        uint32_t timer;
+        uint32_t alarm;
+        uint32_t rtime;
+        uint32_t utime;
+        uint32_t ktime;
 
+        /* Virtual memory management */
+        uint32_t *pdir;
         struct user_page *pages;
-        struct user_page *page_tables;
-
-        struct message *mqueue;
-        int num_messages;
+        struct user_page *ptabs;
 };
 
+#define in_user(t) (t->regs.cs == 0x1b)
+#define in_kernel(t) (t->regs.cs == 0x8)
+
+/* The currently executing task */
 extern struct task *current;
 
+/* System uptime in jiffies */
 extern uint32_t jiffies;
 
 void sched_init();
 void schedule();
 struct task *spawn_user_process();
-struct task *spawn_kernel_task(void (*code)());
+struct task *spawn_kthread(void (*code)());
 struct task *get_process(int pid);
 void idle_task();
 

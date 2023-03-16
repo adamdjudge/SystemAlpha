@@ -1,7 +1,7 @@
 #!/bin/bash
 
 BOOTDISK=sysalpha.img
-KERNEL=kernel/kernel.bin
+KERNEL=kernel.bin
 
 mkdir -p mnt
 cp boot/bootgrub.img $BOOTDISK
