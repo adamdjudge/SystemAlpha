@@ -18,7 +18,7 @@ static int (*syscall_vectors[])() = {
  */
 void handle_syscall(struct exception *e)
 {
-        int call_num, ret;
+        int callno, ret;
 
         /* Other interrupts are allowed while servicing a system call. */
         asm("sti");
@@ -29,7 +29,7 @@ void handle_syscall(struct exception *e)
                 goto end_syscall;
         }
 
-        e->eax = syscall_vectors[call_num]();
+        e->eax = syscall_vectors[callno]();
 
 end_syscall:
         asm("cli");

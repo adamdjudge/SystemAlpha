@@ -15,6 +15,22 @@ static void printx16(uint32_t val);
 static void printx32(uint32_t val);
 static void prints(char *s);
 
+void test1()
+{
+	for (;;) {
+		kprintf("first task\n");
+		for (int i = 0; i < 100000000; i++);
+	}
+}
+
+void test2()
+{
+	for (;;) {
+		kprintf("second task\n");
+		for (int i = 0; i < 200000000; i++);
+	}
+}
+
 void main(const uint32_t *multiboot_info)
 {
 	uint32_t mem_upper = multiboot_info[2];
@@ -34,6 +50,9 @@ void main(const uint32_t *multiboot_info)
 		kpanic("upper memory size less than 1024k");
 
 	tty_init();
+
+	spawn_kthread(test1);
+	spawn_kthread(test2);
 
 	idle_task();
 }

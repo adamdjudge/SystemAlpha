@@ -25,7 +25,7 @@ isr_common:
 
 	mov %cr3, %eax
 	push %eax
-	mov %cr1, %eax
+	mov %cr2, %eax
 	push %eax
 	mov %cr0, %eax
 	push %eax
@@ -42,13 +42,27 @@ isr_common:
 	# it's scheduled for the first time, it returns to here, where it does
 	# an iret to start running user code.
 iret_to_task:
-	add 12, %esp # Discard cr0, cr1, and cr3
+	add $12, %esp # Discard cr0, cr1, and cr3
+
+	# If exception was an IRQ, send EOI command to the PIC(s).
+	cmpl $32, 48(%esp)
+	jl .skip_eoi
+	cmpl $47, 48(%esp)
+	jg .skip_eoi
+	mov $0x20, %al
+	cmpl $40, 48(%esp)
+	jle .skip_slave_eoi
+	out %al, $0xa0
+.skip_slave_eoi:
+	out %al, $0x20
+
+.skip_eoi:
 	popa
 	pop %ds
 	pop %es
 	pop %fs
 	pop %gs
-	add 8, %esp # Discard eno and err
+	add $8, %esp # Discard eno and err
 	iret
 
 ################################################################################

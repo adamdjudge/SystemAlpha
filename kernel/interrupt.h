@@ -13,7 +13,7 @@
 struct exception {
         /* Discarded when returning, but good to have for debug dumps */
         int32_t cr0;
-        int32_t cr1;
+        int32_t cr2;
         int32_t cr3;
 
         /* Pushed by pusha instruction */

@@ -180,11 +180,6 @@ void handle_exception(struct exception e)
 		                    irq_handlers[e.eno - INUM_IRQ0];
 		if (handler)
 			handler();
-		
-		/* Send End of Interrupt command to the PIC(s) */
-		if (e.eno >= INUM_IRQ8)
-			outb(PIC_SLAVE_CMD, 0x20, false);
-		outb(PIC_MASTER_CMD, 0x20, false);
 		return;
 	}
 	
