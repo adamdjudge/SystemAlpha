@@ -48,4 +48,6 @@ struct exception {
 #define kernel_exception(e) (e.cs == 0x8)
 #define user_exception(e) (e.cs != 0x8)
 
+extern void setup_idt();
+
 #endif

@@ -37,7 +37,6 @@ void main(const uint32_t *multiboot_info)
 
 	paging_init(mem_upper);
 	console_init();
-	idt_init();
 	keyboard_init();
 	heap_init();
 	sched_init();

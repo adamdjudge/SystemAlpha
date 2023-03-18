@@ -1,4 +1,125 @@
+################################################################################
+# Here we statically allocate the Interrupt Descriptor Table, which is an array
+# of 256 structures defining an ISR vector for each possible interrupt. Much
+# like with the GDT, we also need a descriptor to point to the IDT, which is
+# loaded later on by the lidt instruction. After these we define a table of
+# pointers to the ISR stubs defined below, which setup_idt loads into the IDT.
+################################################################################
+
+.section .data
+.align 8
+
+idt:
+.rept 256
+	.quad 0x00008e0000080000  # Flags=0x8e, segment=0x08, addrs set later
+.endr
+
+idt_desc:
+	.word idt_desc - idt - 1  # IDT size - 1
+	.long idt                 # IDT pointer
+
+isr_table:
+	.long isr0,  isr1,  isr2,  isr3,  isr4,  isr5,  isr6,  isr7,  isr8, isr9
+	.long isr10, isr11, isr12, isr13, isr14, isr15, isr16, isr17, isr18
+.rept 13
+	.long ignore
+.endr
+	.long irq0, irq1, irq2,  irq3,  irq4,  irq5,  irq6,  irq7
+	.long irq8, irq9, irq10, irq11, irq12, irq13, irq14, irq15
+.rept 207
+	.long ignore
+.endr
+	.long isr_sys
+
+################################################################################
+# pic_remap programs the PICs to map the external interrupt requests to PIC
+# interrupt numbers starting at 32, so as not to interfere with the interrupt
+# numbers used by processor exceptions.
+################################################################################
+
 .section .text
+
+.set PIC0_CMD, 0x20
+.set PIC0_DATA, 0x21
+.set PIC1_CMD, 0xA0
+.set PIC1_DATA, 0xA1
+
+pic_remap:
+	mov $0x11, %al
+	out %al, $PIC0_CMD
+	out %al, $PIC1_CMD
+	call pic_wait
+
+	mov $0x20, %al
+	out %al, $PIC0_DATA
+	mov $0x28, %al
+	out %al, $PIC1_DATA
+	call pic_wait
+
+	mov $0x04, %al
+	out %al, $PIC0_DATA
+	mov $0x02, %al
+	out %al, $PIC1_DATA
+	call pic_wait
+
+	mov $0x01, %al
+	out %al, $PIC0_DATA
+	out %al, $PIC1_DATA
+	call pic_wait
+
+	mov $0x00, %al
+	out %al, $PIC0_DATA
+	out %al, $PIC1_DATA
+	call pic_wait
+
+	ret
+
+pic_wait:
+	mov $255, %cl
+1:
+	loop 1b
+	ret
+
+################################################################################
+# setup_idt fills in the Interrupt Descriptor table with pointers to the
+# interrupt service routine stubs defined below. The mapping of interrupt number
+# to ISR is defined in isr_table above.
+################################################################################
+
+.global setup_idt
+
+setup_idt:
+	push %esi
+	push %edi
+
+	mov $isr_table, %esi
+	mov $idt, %edi
+
+1:
+	mov (%esi), %eax
+	add $4, %esi
+
+	# Split up the ISR pointer into low and high words and store in the
+	# appropriate fields of the IDT entry.
+	mov %ax, (%edi)
+	shr $16, %eax
+	mov %ax, 6(%edi)
+	add $8, %edi
+
+	cmp $idt_desc, %edi
+	jl 1b
+
+	call pic_remap
+	lidt idt_desc
+
+	pop %edi
+	pop %esi
+	ret
+
+# Unused IDT entries are set to point here to ignore unknown interrupts (though
+# they shouldn't happen anyway) in isr_table.
+ignore:
+	iret
 
 ################################################################################
 # Common exception handler, called by all the stubs for individual exception
@@ -15,6 +136,7 @@
 .global iret_to_task
 
 .set KERNEL_DS, 0x10
+.set PIC_EOI, 0x20
 
 isr_common:
 	push %gs
@@ -49,12 +171,12 @@ iret_to_task:
 	jl .skip_eoi
 	cmpl $47, 48(%esp)
 	jg .skip_eoi
-	mov $0x20, %al
+	mov $PIC_EOI, %al
 	cmpl $40, 48(%esp)
 	jle .skip_slave_eoi
-	out %al, $0xa0
+	out %al, $PIC1_CMD
 .skip_slave_eoi:
-	out %al, $0x20
+	out %al, $PIC0_CMD
 
 .skip_eoi:
 	popa

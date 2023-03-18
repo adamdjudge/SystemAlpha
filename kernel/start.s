@@ -57,8 +57,6 @@ page_table:
 .section .data
 .align 8
 
-.global tss
-
 .set KERNEL_CS, 0x8
 .set KERNEL_DS, 0x10
 .set KERNEL_TS, 0x28
@@ -83,15 +81,16 @@ tss:
 	.skip 192
 
 ################################################################################
-# Kernel entry point code. Sets the stack pointer, loads the GDT and TSS, sets
-# the segment registers properly, and then calls the C main() function to fully
-# initialize the kernel with a pointer to the info struct Multiboot gives us as
-# the single argument. main() shouldn't return, but if it does we just lock up
-# with an infinite loop.
+# Kernel entry point code. Sets the stack pointer and segment registers, loads
+# the GDT and TSS, calls external code to setup the IDT, and then calls the C
+# main() function to fully initialize the kernel, with a pointer to the info
+# struct Multiboot gives us as the single argument. main() should not return,
+# but if it does we just lock up with an infinite loop.
 ################################################################################
 
 .section .text
 
+.extern setup_idt
 .extern main
 .global start
 
@@ -120,6 +119,8 @@ start:
 	mov $KERNEL_TS, %ax
 	ltr %ax
 	mov $tss, %eax
+
+	call setup_idt
 
 	push %ebx
 	call main
@@ -150,12 +151,6 @@ enable_paging:
 flush_tlb:
 	mov %cr3, %eax
 	mov %eax, %cr3
-	ret
-
-# Load the Interrupt Descriptor Table.
-.extern idt_ptr
-load_idt:
-	lidt idt_ptr
 	ret
 
 # Performs the switch to the next task by swapping the current kernel stack,
