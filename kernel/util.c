@@ -1,4 +1,4 @@
-#include "util.h"
+#include <kernel/util.h>
 
 void memset(void *s, uint8_t c, uint32_t n)
 {

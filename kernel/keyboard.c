@@ -1,6 +1,8 @@
-#include "kernel.h"
-#include "io.h"
-#include "console.h"
+#include <asm/io.h>
+
+#include <kernel/kernel.h>
+#include <kernel/console.h>
+#include <kernel/keyboard.h>
 
 /* I/O ports */
 #define PS2_DATA 0x60

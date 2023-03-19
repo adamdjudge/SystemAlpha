@@ -1,8 +1,6 @@
-#include "interrupt.h"
-#include "sched.h"
-#include "malloc.h"
-
-#include "syscall.h"
+#include <asm/interrupt.h>
+#include <kernel/kernel.h>
+#include <kernel/syscall.h>
 
 static int no_sys()
 {

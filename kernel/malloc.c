@@ -1,8 +1,6 @@
-#include "kernel.h"
-#include "util.h"
-#include "paging.h"
-
-#include "malloc.h"
+#include <kernel/kernel.h>
+#include <kernel/paging.h>
+#include <kernel/malloc.h>
 
 #define CHUNK_HEADER     0x80000000
 #define CHUNK_ALLOCATED  0x40000000

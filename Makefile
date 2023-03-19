@@ -1,4 +1,4 @@
-CC = gcc -m32 -nostdlib -fno-builtin -Wno-write-strings -fno-leading-underscore
+CC = gcc -m32 -nostdlib -fno-builtin -Wno-write-strings -fno-leading-underscore -Iinclude
 AS = as --32
 LD = ld -melf_i386
 

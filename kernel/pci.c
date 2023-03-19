@@ -1,7 +1,6 @@
-#include "io.h"
-#include "console.h"
-
-#include "pci.h"
+#include <asm/io.h>
+#include <kernel/kernel.h>
+#include <kernel/pci.h>
 
 #define PCI_ADDR 0xcf8
 #define PCI_DATA 0xcfc

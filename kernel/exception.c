@@ -1,11 +1,11 @@
-#include "kernel.h"
-#include "io.h"
-#include "sched.h"
-#include "syscall.h"
-#include "keyboard.h"
+#include <kernel/kernel.h>
+#include <kernel/sched.h>
+#include <asm/interrupt.h>
 
-#include "interrupt.h"
-#include "exception.h"
+extern void handle_timer();
+extern void handle_keyboard();
+
+extern void handle_syscall(struct exception *e);
 
 /* Array of IRQ handlers for drivers. */
 static void (*irq_handlers[16])() = {
@@ -51,8 +51,6 @@ void handle_exception(struct exception e)
 
 	/* Call appropriate driver ISR (if installed) for IRQs */
 	if (e.eno >= INUM_IRQ0 && e.eno <= INUM_IRQ15) {
-		void (*handler)() = (void (*)()) 
-		                    irq_handlers[e.eno - INUM_IRQ0];
 		if (irq_handlers[e.eno-INUM_IRQ0])
 			irq_handlers[e.eno-INUM_IRQ0]();
 		return;

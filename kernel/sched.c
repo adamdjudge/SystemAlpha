@@ -1,8 +1,9 @@
-#include "paging.h"
-#include "util.h"
-#include "io.h"
+#include <asm/io.h>
+#include <asm/interrupt.h>
 
-#include "sched.h"
+#include <kernel/kernel.h>
+#include <kernel/paging.h>
+#include <kernel/sched.h>
 
 extern void switch_task();
 extern void iret_to_task();

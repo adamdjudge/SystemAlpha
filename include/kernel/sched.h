@@ -1,8 +1,7 @@
 #ifndef SCHED_H
 #define SCHED_H
 
-#include "types.h"
-#include "interrupt.h"
+#include <kernel/types.h>
 
 /* Divider frequency for the PIT chip, which should cause an IRQ 0 interrupt
    approximately 99.998 times per second, the closest we can get to 100 Hz */
@@ -67,6 +66,5 @@ struct task *spawn_task();
 struct task *spawn_kthread(void (*code)());
 struct task *get_process(int pid);
 void idle_task();
-void handle_timer();
 
 #endif

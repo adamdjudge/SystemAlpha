@@ -1,7 +1,7 @@
 #ifndef SYSCALL_H
 #define SYSCALL_H
 
-#include "types.h"
+#include <kernel/types.h>
 
 struct syscall_args {
         int32_t _1;
@@ -19,7 +19,5 @@ enum {
         ENOMEM,
         EAGAIN,
 };
-
-void handle_syscall();
 
 #endif

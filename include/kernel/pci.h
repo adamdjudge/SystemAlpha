@@ -1,7 +1,7 @@
 #ifndef PCI_H
 #define PCI_H
 
-#include "types.h"
+#include <kernel/kernel.h>
 
 struct pci_addr {
         uint8_t bus;

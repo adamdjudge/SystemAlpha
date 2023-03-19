@@ -1,13 +1,9 @@
-#include "kernel.h"
-#include "util.h"
-#include "paging.h"
-#include "console.h"
-#include "keyboard.h"
-#include "malloc.h"
-#include "sched.h"
-#include "syscall.h"
-
-#include "../drivers/tty.h"
+#include <kernel/kernel.h>
+#include <kernel/paging.h>
+#include <kernel/console.h>
+#include <kernel/keyboard.h>
+#include <kernel/malloc.h>
+#include <kernel/sched.h>
 
 static void printd(uint32_t val);
 static void printx16(uint32_t val);
@@ -47,7 +43,7 @@ void main(const uint32_t *multiboot_info)
 	if (mem_upper < 1024)
 		kpanic("upper memory size less than 1024k");
 
-	tty_init();
+	//tty_init();
 
 	spawn_kthread(test1);
 	spawn_kthread(test2);

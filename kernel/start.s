@@ -115,7 +115,6 @@ start:
 	jmp $KERNEL_CS, $1f
 1:	mov $KERNEL_TS, %ax
 	ltr %ax
-	mov $tss, %eax
 
 	call setup_idt
 

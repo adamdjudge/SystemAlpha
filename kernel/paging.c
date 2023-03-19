@@ -1,9 +1,6 @@
-#include "kernel.h"
-#include "util.h"
-#include "sched.h"
-#include "malloc.h"
-
-#include "paging.h"
+#include <kernel/kernel.h>
+#include <kernel/malloc.h>
+#include <kernel/paging.h>
 
 #define PAGE_ALIGN(n) ((n + 0xfff) & ~0xfff)
 

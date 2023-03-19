@@ -1,8 +1,6 @@
-#include "io.h"
-#include "types.h"
-#include "util.h"
-
-#include "console.h"
+#include <asm/io.h>
+#include <kernel/kernel.h>
+#include <kernel/console.h>
 
 #define INDEX_REG 0x3d4
 #define DATA_REG 0x3d5

@@ -1,7 +1,7 @@
 #ifndef IO_H
 #define IO_H
 
-#include "types.h"
+#include <kernel/types.h>
 
 uint8_t inb(uint16_t port, bool wait);
 void outb(uint16_t port, uint8_t data, bool wait);

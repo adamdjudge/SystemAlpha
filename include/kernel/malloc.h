@@ -1,7 +1,7 @@
 #ifndef MALLOC_H
 #define MALLOC_H
 
-#include "types.h"
+#include <kernel/types.h>
 
 /* Number of pages to allocate for use as kernel heap */
 #define HEAP_PAGES 4
