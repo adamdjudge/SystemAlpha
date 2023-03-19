@@ -1,5 +1,4 @@
 #include "paging.h"
-#include "idt.h"
 #include "util.h"
 #include "io.h"
 
@@ -87,7 +86,6 @@ struct task *spawn_task(uint32_t entry)
         kstack->e.eflags = 1 << 9; /* Enable interrupts */
         kstack->e.eip = entry;
         kstack->e.esp = 0xfffff000;
-        kstack->e.eno = 32; /* Pretend we came from a timer interrupt */
         kstack->ret = (uint32_t) iret_to_task;
 
         t->pid = next_pid++;
@@ -119,7 +117,6 @@ struct task *spawn_kthread(void (*code)())
         kstack->e.gs = 0x10;
         kstack->e.eflags = 1 << 9; /* Enable interrupts */
         kstack->e.eip = (uint32_t) code;
-        kstack->e.eno = 32; /* Pretend we came from a timer interrupt */
         kstack->ret = (uint32_t) iret_to_task;
 
         t->pdir = page_directory;
@@ -160,7 +157,7 @@ void schedule()
  * and switches to that task if it has. Otherwise invokes the scheduler on a
  * regular basis.
  */
-static void handle_timer()
+void handle_timer()
 {
         int i;
 
@@ -197,7 +194,6 @@ void sched_init()
         outb(PIT_CMD, 0x36, false); /* binary, rate gen, 16-bit, counter 0 */
         outb(PIT_DATA, TIMER_DIVIDER & 0xff, false);
         outb(PIT_DATA, (TIMER_DIVIDER >> 8) & 0xff, false);
-        idt_install_isr(0, handle_timer);
 }
 
 /*

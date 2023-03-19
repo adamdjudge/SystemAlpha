@@ -76,8 +76,7 @@ pic_remap:
 
 pic_wait:
 	mov $255, %cl
-1:
-	loop 1b
+1:	loop 1b
 	ret
 
 ################################################################################
@@ -95,8 +94,7 @@ setup_idt:
 	mov $isr_table, %esi
 	mov $idt, %edi
 
-1:
-	mov (%esi), %eax
+1:	mov (%esi), %eax
 	add $4, %esi
 
 	# Split up the ISR pointer into low and high words and store in the
@@ -130,8 +128,20 @@ ignore:
 # where SS:ESP was only pushed if we came from user mode. We also need to push
 # all the other registers to preserve task state, and then we can call the main
 # exception handling code in C.
+#
+# The last_interrupt variable stores the number of every interrupt that occurs,
+# and is used to determine whether to send an End of Interrupt command to the
+# PIC(s) before returning. It's a duplicate of the number put on the stack,
+# because a task switch might swap in a stack containing a different interrupt
+# number, which could prevent sending the EOI.
 ################################################################################
 
+.section .data
+
+last_interrupt:
+	.byte 0
+
+.section .text
 .extern handle_exception
 .global iret_to_task
 
@@ -158,6 +168,9 @@ isr_common:
 	mov %ax, %fs
 	mov %ax, %gs
 
+	mov 60(%esp), %eax
+	mov %al, last_interrupt
+
         call handle_exception
 
 	# When a new task is created, its kernel stack is filled in so that when
@@ -165,18 +178,18 @@ isr_common:
 	# an iret to start running user code.
 iret_to_task:
 	add $12, %esp # Discard cr0, cr1, and cr3
-
-	# If exception was an IRQ, send EOI command to the PIC(s).
-	cmpl $32, 48(%esp)
+	mov last_interrupt, %bl
+	cmp $32, %bl
 	jl .skip_eoi
-	cmpl $47, 48(%esp)
+	cmp $47, %bl
 	jg .skip_eoi
+
+	# The last exception was an IRQ, so send EOI command to the PIC(s).
 	mov $PIC_EOI, %al
-	cmpl $40, 48(%esp)
-	jle .skip_slave_eoi
+	cmp $40, %bl
+	jle 1f
 	out %al, $PIC1_CMD
-.skip_slave_eoi:
-	out %al, $PIC0_CMD
+1:	out %al, $PIC0_CMD
 
 .skip_eoi:
 	popa

@@ -45,6 +45,4 @@ enum {
 	INUM_SYSCALL = 255
 };
 
-void idt_install_isr(uint8_t irq_num, void (*handler)());
-
 #endif

@@ -98,14 +98,11 @@ start:
 	cli
 	mov $kstack_top, %esp
 
-	# Set TSS segment base pointer here because stupid assembler won't let
-	# us do logical operations to compute constants.
+	# Set TSS segment base pointer here because the assembler won't let us
+	# do logical operations to compute constants. This simple method is fine
+	# because we know the address will have the highest 8 bits cleared.
 	mov $tss, %eax
-	shl $16, %eax
-	or %eax, gdt + KERNEL_TS
-	mov $tss, %eax
-	shr $16, %eax
-	or %eax, gdt + KERNEL_TS + 4
+	or %eax, gdt + KERNEL_TS + 2
 
 	mov $KERNEL_DS, %ax
 	mov %ax, %ds
@@ -113,10 +110,10 @@ start:
 	mov %ax, %fs
 	mov %ax, %gs
 	mov %ax, %ss
+
 	lgdt gdt_desc
 	jmp $KERNEL_CS, $1f
-1:
-	mov $KERNEL_TS, %ax
+1:	mov $KERNEL_TS, %ax
 	ltr %ax
 	mov $tss, %eax
 
@@ -125,8 +122,7 @@ start:
 	push %ebx
 	call main
 
-1:
-	hlt
+1:	hlt
 	jmp 1b
 
 ################################################################################

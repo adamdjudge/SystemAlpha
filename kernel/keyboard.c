@@ -1,6 +1,5 @@
 #include "kernel.h"
 #include "io.h"
-#include "idt.h"
 #include "console.h"
 
 /* I/O ports */
@@ -121,7 +120,7 @@ static uint8_t read_data()
 	return inb(PS2_DATA, false);
 }
 
-static void keyboard_handler()
+void handle_keyboard()
 {
 	unsigned char data = inb(PS2_DATA, false);
 
@@ -175,6 +174,4 @@ void keyboard_init()
 	/* Enable device and scanning */
 	controller_cmd(PS2CMD_ENABLE_1);
 	keyboard_cmd(KBDCMD_ENABLE);
-
-	idt_install_isr(1, keyboard_handler);
 }

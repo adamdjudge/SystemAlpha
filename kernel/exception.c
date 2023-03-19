@@ -2,20 +2,30 @@
 #include "io.h"
 #include "sched.h"
 #include "syscall.h"
+#include "keyboard.h"
 
 #include "interrupt.h"
-#include "idt.h"
+#include "exception.h"
 
-/* Array of IRQ handlers installable by drivers */
-static uint32_t irq_handlers[16] = {0};
-
-/* Install an IRQ handler to be called whenever that IRQ number is fired */
-void idt_install_isr(uint8_t irq_num, void (*handler)())
-{
-	if (irq_num > 15)
-		return;
-	irq_handlers[irq_num] = (uint32_t) handler;
-}
+/* Array of IRQ handlers for drivers. */
+static void (*irq_handlers[16])() = {
+	handle_timer,
+	handle_keyboard,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL
+};
 
 static void dump_exception(struct exception *e)
 {
@@ -43,8 +53,8 @@ void handle_exception(struct exception e)
 	if (e.eno >= INUM_IRQ0 && e.eno <= INUM_IRQ15) {
 		void (*handler)() = (void (*)()) 
 		                    irq_handlers[e.eno - INUM_IRQ0];
-		if (handler)
-			handler();
+		if (irq_handlers[e.eno-INUM_IRQ0])
+			irq_handlers[e.eno-INUM_IRQ0]();
 		return;
 	}
 	

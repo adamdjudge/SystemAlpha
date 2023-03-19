@@ -3,7 +3,6 @@
 #include "paging.h"
 #include "console.h"
 #include "keyboard.h"
-#include "idt.h"
 #include "malloc.h"
 #include "sched.h"
 #include "syscall.h"

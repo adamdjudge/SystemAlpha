@@ -67,5 +67,6 @@ struct task *spawn_task();
 struct task *spawn_kthread(void (*code)());
 struct task *get_process(int pid);
 void idle_task();
+void handle_timer();
 
 #endif
